@@ -1,0 +1,55 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: replica-maintenance
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        environment: production
+  schedules:
+    - name: weekly
+      cron: "0 2 * * 0"
+      timeZone: UTC
+      duration: 2h
+  targets:
+    - name: deployments
+      apiVersion: apps/v1
+      kind: Deployment
+  admission:
+    - name: freeze-replicas
+      targets: [deployments]
+      operations: [UPDATE]
+      subresources: ["", scale]
+      when: Active
+      action: Deny
+      audience:
+        include:
+          - kind: Group
+            name: application-developers
+          - kind: ServiceAccount
+            name: deployer
+            namespace: production
+        exclude:
+          - kind: User
+            name: break-glass
+      matchConditions:
+        - name: replicas-changed
+          expression: "object.spec.replicas != oldObject.spec.replicas"
+      message: "Replica changes are frozen during maintenance."
+  config:
+    admission:
+      warnings:
+        - name: upcoming-replica-freeze
+          targets: [deployments]
+          operations: [UPDATE]
+          subresources: ["", scale]
+          when: BeforeStart
+          within: 1h
+          audience:
+            include:
+              - kind: Group
+                name: application-developers
+          matchConditions:
+            - name: replicas-changed
+              expression: "object.spec.replicas != oldObject.spec.replicas"
+          message: "Replica changes will be frozen at {{ .window.start }}."

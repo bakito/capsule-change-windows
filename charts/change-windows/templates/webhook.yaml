@@ -1,0 +1,140 @@
+{{- $values := omit .Values "webhooks" -}}
+{{- $_ := set $values "webhooks" (include "change-windows.webhooks.renderValue" (dict "value" .Values.webhooks "ctx" $ "path" "webhooks") | mustFromJson) -}}
+{{- $ := set (omit . "Values") "Values" $values -}}
+{{- with $ }}
+{{- if and .Values.webhooks.enabled (or (not .Values.crds.exclusive) .Values.webhooks.exclusive) }}
+{{- if not .Values.webhooks.service.url }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "change-windows.name" $ }}-webhook
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+spec:
+  selector:
+    {{- include "change-windows.selectorLabels" $ | nindent 4 }}
+  ports:
+  - port: {{ default 443 .Values.webhooks.service.port }}
+    targetPort: 9443
+{{- end }}
+{{- if and $.Values.webhooks.certificate.generate.enabled (not $.Values.webhooks.service.url) }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+spec:
+  secretName: {{ include "change-windows.webhooks.secret" $ | quote }}
+  dnsNames:
+  - {{ printf "%s-webhook" (include "change-windows.name" $) }}
+  - {{ printf "%s-webhook.%s.svc" (include "change-windows.name" $) .Release.Namespace }}
+  - {{ printf "%s-metrics" (include "change-windows.name" $) }}
+  - {{ printf "%s-metrics.%s.svc" (include "change-windows.name" $) .Release.Namespace }}
+  {{- range $dns := $.Values.webhooks.certificate.generate.dnsNames }}
+  - {{ $dns | quote }}
+  {{- end }}
+  {{- with $.Values.webhooks.certificate.generate.ipAddresses }}
+  ipAddresses:
+    {{- range $ip := . }}
+  - {{ $ip | quote }}
+    {{- end }}
+  {{- end }}
+  {{- with $.Values.webhooks.certificate.generate.uris }}
+  uris:
+    {{- range $uri := . }}
+  - {{ $uri | quote }}
+    {{- end }}
+  {{- end }}
+  {{- with $.Values.webhooks.certificate.generate.duration }}
+  duration: {{ . | quote }}
+  {{- end }}
+  {{- with $.Values.webhooks.certificate.generate.renewBefore }}
+  renewBefore: {{ . | quote }}
+  {{- end }}
+  subject:
+    organizations:
+      - projectcapsule.dev
+  issuerRef:
+    name: {{ include "change-windows.name" $ }}
+    kind: Issuer
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+    {{- include "change-windows.webhooks.labels" $ | nindent 4 }}
+  annotations:
+    {{- include "change-windows.webhooks.annotations" $ | nindent 4 }}
+webhooks:
+{{- with .Values.webhooks.hooks.resources }}
+- name: resources.change-windows.addons.projectcapsule.dev
+  admissionReviewVersions: [v1]
+  sideEffects: None
+  failurePolicy: {{ .failurePolicy | quote }}
+  matchPolicy: {{ .matchPolicy | quote }}
+  timeoutSeconds: {{ .timeoutSeconds }}
+  clientConfig:
+    {{- include "change-windows.webhooks.service" (dict "ctx" $ "path" "/validate-resources") | nindent 4 }}
+  {{- with .objectSelector }}
+  objectSelector:
+    {{- toYaml . |  nindent 4 }}
+  {{- end }}
+  {{- with .namespaceSelector }}
+  namespaceSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .matchConditions }}
+  matchConditions:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .rules }}
+  rules:
+    {{- toYaml . |  nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- with .Values.webhooks.hooks.changewindows }}
+- name: changewindows.change-windows.addons.projectcapsule.dev
+  admissionReviewVersions: [v1]
+  sideEffects: None
+  failurePolicy: {{ .failurePolicy | quote }}
+  matchPolicy: {{ .matchPolicy | quote }}
+  timeoutSeconds: {{ .timeoutSeconds }}
+  clientConfig:
+    {{- include "change-windows.webhooks.service" (dict "ctx" $ "path" "/validate-changewindow") | nindent 4 }}
+  {{- with .objectSelector }}
+  objectSelector:
+    {{- toYaml . |  nindent 4 }}
+  {{- end }}
+  {{- with .namespaceSelector }}
+  namespaceSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .matchConditions }}
+  matchConditions:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .rules }}
+  rules:
+    {{- toYaml . |  nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

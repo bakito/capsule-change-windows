@@ -1,0 +1,40 @@
+{{- if not .Values.crds.exclusive }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "change-windows.name" $ }}-metrics
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+spec:
+  selector:
+    {{- include "change-windows.selectorLabels" $ | nindent 4 }}
+  ports:
+  - name: https
+    port: 8443
+    targetPort: 8443
+{{- if .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "change-windows.selectorLabels" $ | nindent 6 }}
+  endpoints:
+  - port: https
+    scheme: https
+    {{- with $.Values.metrics.serviceMonitor.tokenSecret }}
+    authorization:
+      credentials:
+        name: {{ . }}
+        key: token
+    {{- end }}
+{{- end }}
+{{- end }}

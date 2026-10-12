@@ -1,0 +1,574 @@
+version: '3'
+
+set: [errexit, nounset, pipefail]
+
+vars:
+  GIT_VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  VERSION: '{{.VERSION | default .GIT_VERSION}}'
+  REGISTRY: '{{.REGISTRY | default "ghcr.io"}}'
+  REPOSITORY: '{{.REPOSITORY | default "projectcapsule/change-windows"}}'
+  IMG: '{{.IMG | default (printf "%s/%s:%s" .REGISTRY .REPOSITORY .VERSION)}}'
+  IMAGE_PLATFORM: '{{.IMAGE_PLATFORM | default ""}}'
+  PLATFORMS: '{{.PLATFORMS | default "linux/amd64,linux/arm64"}}'
+  IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE | default "dist/controller.tar"}}'
+  IMAGE_REFS: '{{.IMAGE_REFS | default "dist/image-refs.txt"}}'
+  BUILD_DIR: '{{.BUILD_DIR | default "bin"}}'
+  ARTIFACTS: '{{.ARTIFACTS | default "artifacts"}}'
+  KIND_CLUSTER: '{{.KIND_CLUSTER | default "scheduled-action-e2e"}}'
+  KIND_NODE_IMAGE: '{{.KIND_NODE_IMAGE | default "kindest/node:v1.36.1"}}'
+  ENVTEST_K8S_VERSION: '{{.ENVTEST_K8S_VERSION | default "1.36.0"}}'
+  ENVTEST_ASSETS_DIR: '{{.ENVTEST_ASSETS_DIR | default "bin/envtest"}}'
+  GO_TEST_FLAGS: '{{.GO_TEST_FLAGS | default "-race"}}'
+  ENTERPRISE_VERSION: '{{.ENTERPRISE_VERSION | default ""}}'
+  ENTERPRISE_REGISTRY: '{{.ENTERPRISE_REGISTRY | default "registry.projectcapsule.dev"}}'
+  DRY_RUN: '{{.DRY_RUN | default "false"}}'
+  DOCS_BASE_URL: '{{.DOCS_BASE_URL | default "https://projectcapsule.github.io/schedule-action-controller/"}}'
+
+  LAPTOP_HOST_IP: '{{.LAPTOP_HOST_IP | default ""}}'
+  DEV_HOST: '{{.DEV_HOST | default .LAPTOP_HOST_IP | default ""}}'
+  DEV_CONTEXT: '{{.DEV_CONTEXT | default ""}}'
+  DEV_NAMESPACE: '{{.DEV_NAMESPACE | default "change-windows-system"}}'
+  DEV_RELEASE: '{{.DEV_RELEASE | default "change-windows"}}'
+  DEV_CERT_DIR: '{{.DEV_CERT_DIR | default "bin/dev/serving-certs"}}'
+  DEV_IMAGE_MODE: '{{.DEV_IMAGE_MODE | default "kind"}}'
+  DEV_KIND_CLUSTER: '{{.DEV_KIND_CLUSTER | default ""}}'
+  DEV_HELM_VALUES: '{{.DEV_HELM_VALUES | default ""}}'
+  DEV_TIMEOUT: '{{.DEV_TIMEOUT | default "180"}}'
+
+tasks:
+  default:
+    desc: List available tasks.
+    cmds:
+      - task --list
+
+  generate:
+    desc: Generate DeepCopy methods.
+    run: once
+    cmds:
+      - bash hack/check-tools.sh controller-gen
+      - controller-gen object:headerFile=hack/boilerplate.go.txt paths=./...
+
+  manifests:
+    desc: Generate CRDs/RBAC and refresh their Helm chart copies.
+    run: once
+    cmds:
+      - bash hack/check-tools.sh controller-gen
+      - controller-gen rbac:roleName=manager-role crd webhook paths=./... output:crd:artifacts:config=config/crd/bases
+      - mkdir -p charts/change-windows/crds charts/change-windows/files
+      - cp config/crd/bases/*.yaml charts/change-windows/crds/
+      - cp config/rbac/role.yaml charts/change-windows/files/manager-role.yaml
+
+  fmt:
+    desc: Format Go sources and maintained YAML files.
+    cmds:
+      - golangci-lint fmt
+      - yamlfmt .
+
+  vet:
+    desc: Run go vet.
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run unit and real API-server tests with the race detector.
+    env:
+      ENVTEST_K8S_VERSION: '{{.ENVTEST_K8S_VERSION}}'
+      ENVTEST_ASSETS_DIR: '{{.ENVTEST_ASSETS_DIR}}'
+      GO_TEST_FLAGS: '{{.GO_TEST_FLAGS}}'
+    cmds:
+      - task: generate
+      - task: manifests
+      - |
+        if [ -z "${KUBEBUILDER_ASSETS:-}" ]; then
+          KUBEBUILDER_ASSETS="$(setup-envtest use "$ENVTEST_K8S_VERSION" --bin-dir "$ENVTEST_ASSETS_DIR" -p path)"
+        fi
+        KUBEBUILDER_ASSETS="$(cd "$KUBEBUILDER_ASSETS" && pwd)"
+        export KUBEBUILDER_ASSETS
+        read -r -a flags <<< "$GO_TEST_FLAGS"
+        go test "${flags[@]}" ./... -coverprofile=coverage.out
+
+  test:unit:
+    desc: Run unit tests without starting an API server.
+    aliases: [test-unit]
+    env:
+      GO_TEST_FLAGS: '{{.GO_TEST_FLAGS}}'
+    cmds:
+      - task: generate
+      - |
+        read -r -a flags <<< "$GO_TEST_FLAGS"
+        go test "${flags[@]}" ./... -skip '^TestAPI$'
+
+  test:tooling:
+    desc: Test Task, hook, rendering, and release command behavior without publishing.
+    cmds:
+      - go test -tags=tooling ./hack/tooling -v
+
+  docs:generate:
+    desc: Generate the API reference from Go types.
+    cmds:
+      - bash hack/docs-api.sh generate
+
+  docs:install:
+    desc: Install locked Doks theme and asset dependencies.
+    dir: docs
+    run: once
+    cmds:
+      - npm ci --ignore-scripts --no-audit --no-fund
+
+  docs:toolchain:
+    internal: true
+    run: once
+    cmds:
+      - bash hack/check-hugo.sh
+
+  docs:build:
+    desc: Build the Hugo documentation into dist/docs.
+    env:
+      DOCS_BASE_URL: '{{.DOCS_BASE_URL}}'
+    cmds:
+      - task: docs:toolchain
+      - task: docs:install
+      - task: docs:generate
+      - npm --prefix docs run build -- --baseURL "$DOCS_BASE_URL"
+
+  docs:serve:
+    desc: Preview documentation at http://localhost:1313 with live reload.
+    cmds:
+      - task: docs:toolchain
+      - task: docs:install
+      - task: docs:generate
+      - npm --prefix docs run dev -- --baseURL http://localhost:1313/
+
+  docs:check:
+    desc: Check API-reference drift, example validity, and rendered links/assets.
+    cmds:
+      - task: docs:toolchain
+      - task: docs:install
+      - bash hack/docs-api.sh check
+      - go test -tags=docs ./hack/docs -v -count=1
+
+  docs:test:browser:
+    desc: Test the homepage YAML explorer on desktop and mobile Chromium.
+    cmds:
+      - task: docs:toolchain
+      - task: docs:install
+      - npm --prefix docs run test:browser
+
+  docs:browser:install:
+    desc: Install Chromium and its Linux runtime dependencies for documentation tests.
+    cmds:
+      - task: docs:install
+      - npm --prefix docs exec -- playwright install --with-deps chromium
+
+  headlamp:install:
+    desc: Install the plugin's locked npm dependencies.
+    dir: headlamp
+    cmds:
+      - npm ci --include=dev --no-audit --no-fund
+
+  headlamp:check:
+    desc: Lint, format-check, type-check, test and build the Headlamp plugin.
+    dir: headlamp
+    cmds:
+      - npm run check
+
+  headlamp:build:
+    desc: Build the plugin into headlamp/dist.
+    dir: headlamp
+    cmds:
+      - npm run build
+
+  headlamp:serve:
+    desc: Start the Headlamp SDK plugin development watcher.
+    dir: headlamp
+    cmds:
+      - npm start
+
+  headlamp:test:browser:
+    desc: Test the built plugin in an existing Headlamp frontend using intercepted API fixtures.
+    dir: headlamp
+    cmds:
+      - npm run build
+      - npm run test:browser
+
+  headlamp:package:
+    desc: Package the plugin locally without publishing.
+    dir: headlamp
+    cmds:
+      - npm run build
+      - npm run package
+
+  lint:
+    desc: Lint Go sources.
+    aliases: [golint]
+    cmds:
+      - golangci-lint run --timeout=5m
+
+  lint:fix:
+    desc: Apply Go lint and formatting fixes.
+    aliases: [lint-fix, golint-fix]
+    cmds:
+      - golangci-lint fmt
+      - golangci-lint run --fix --timeout=5m
+
+  lint:config:
+    desc: Validate the Go linter configuration.
+    aliases: [lint-config]
+    cmds:
+      - golangci-lint config verify
+
+  lint:yaml:
+    desc: Validate YAML syntax and formatting without Python.
+    aliases: [lint-yaml]
+    cmds:
+      - prek run check-yaml --all-files
+      - yamlfmt -lint .
+
+  lint:actions:
+    desc: Validate GitHub Actions and inline shell scripts.
+    aliases: [lint-actions]
+    cmds:
+      - actionlint -pyflakes=''
+
+  lint:shell:
+    desc: Check development and release shell scripts.
+    cmds:
+      - shellcheck hack/*.sh
+
+  lint:files:
+    desc: Run native prek file hygiene and syntax checks.
+    cmds:
+      - prek run --group files --all-files
+
+  lint:commits:
+    desc: Validate Conventional Commits between COMMIT_BASE and COMMIT_HEAD.
+    cmds:
+      - bash hack/verify-commits.sh
+
+  test:benchmarks:
+    desc: Check benchmark fixtures with the race detector.
+    cmds:
+      - go test -race ./internal/... -run '^$' -bench . -benchtime=1x
+
+  ci:cache:
+    desc: Write Go cache paths to GITHUB_OUTPUT.
+    cmds:
+      - bash hack/ci-output.sh cache
+
+  ci:version:
+    desc: Validate a release tag and write its version to GITHUB_OUTPUT.
+    cmds:
+      - bash hack/ci-output.sh version
+
+  ci:image:
+    desc: Export the published image and digest for signing and provenance.
+    env:
+      IMAGE_REFS: '{{.IMAGE_REFS}}'
+    cmds:
+      - bash hack/ci-output.sh image
+
+  hooks:install:
+    desc: Install prek's pre-commit and commit-msg hooks.
+    cmds:
+      - prek install --force --hook-type pre-commit --hook-type commit-msg
+
+  hooks:check:
+    desc: Run all pre-commit hooks on tracked files.
+    cmds:
+      - prek run --all-files
+
+  verify-generated:
+    desc: Reject stale or untracked generated artifacts.
+    cmds:
+      - task: generate
+      - task: manifests
+      - git diff --exit-code -- api config charts/change-windows/crds charts/change-windows/files
+      - |
+        if [ -n "$(git ls-files --others --exclude-standard api config charts/change-windows/crds charts/change-windows/files)" ]; then
+          echo 'Untracked generated files found in api/, config/, or chart copies' >&2
+          exit 1
+        fi
+
+  build:
+    desc: Build the controller binary.
+    aliases: [all]
+    env:
+      BUILD_DIR: '{{.BUILD_DIR}}'
+    cmds:
+      - task: generate
+      - task: manifests
+      - task: vet
+      - mkdir -p "$BUILD_DIR"
+      - go build -trimpath -o "$BUILD_DIR/manager" ./cmd
+
+  run:
+    desc: Run the controller against the current kubeconfig context.
+    cmds:
+      - task: generate
+      - task: manifests
+      - go run ./cmd
+
+  dev:setup:
+    desc: Install CRDs and admission webhooks pointing to DEV_HOST on port 9443.
+    aliases: [dev-setup]
+    env: &dev-env
+      DEV_HOST: '{{.DEV_HOST}}'
+      DEV_CONTEXT: '{{.DEV_CONTEXT}}'
+      DEV_NAMESPACE: '{{.DEV_NAMESPACE}}'
+      DEV_RELEASE: '{{.DEV_RELEASE}}'
+      DEV_CERT_DIR: '{{.DEV_CERT_DIR}}'
+    cmds:
+      - task: generate
+      - task: manifests
+      - bash hack/dev-setup.sh setup
+
+  dev:run:
+    desc: Run the host controller using the dev:setup certificates and kubeconfig context.
+    aliases: [dev-run]
+    env: *dev-env
+    cmds:
+      - bash hack/dev-setup.sh run
+
+  dev:deploy:
+    desc: Build current source with ko and deploy with Helm to an explicit development context.
+    aliases: [dev-deploy]
+    env:
+      DEV_CONTEXT: '{{.DEV_CONTEXT}}'
+      DEV_NAMESPACE: '{{.DEV_NAMESPACE}}'
+      DEV_RELEASE: '{{.DEV_RELEASE}}'
+      DEV_IMAGE_MODE: '{{.DEV_IMAGE_MODE}}'
+      DEV_KIND_CLUSTER: '{{.DEV_KIND_CLUSTER}}'
+      DEV_HELM_VALUES: '{{.DEV_HELM_VALUES}}'
+      DEV_TIMEOUT: '{{.DEV_TIMEOUT}}'
+      IMG: '{{.IMG}}'
+      IMAGE_PLATFORM: '{{.IMAGE_PLATFORM}}'
+      PLATFORMS: '{{.PLATFORMS}}'
+      IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE}}'
+      IMAGE_REFS: '{{.IMAGE_REFS}}'
+    cmds:
+      - |
+        tools=(go controller-gen ko helm kubectl openssl)
+        if [ "$DEV_IMAGE_MODE" = kind ]; then tools+=(kind); fi
+        bash hack/check-tools.sh "${tools[@]}"
+      - task: generate
+      - task: manifests
+      - bash hack/dev-deploy.sh
+
+  image:build:
+    desc: Build a Linux image archive with ko, without a container daemon or registry push.
+    aliases: ['image:ko', ko-build-controller, ko-build-all]
+    env:
+      IMG: '{{.IMG}}'
+      IMAGE_PLATFORM: '{{.IMAGE_PLATFORM}}'
+      IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE}}'
+      IMAGE_REFS: '{{.IMAGE_REFS}}'
+    cmds:
+      - task: generate
+      - bash hack/image.sh build
+
+  image:push:
+    desc: Build and publish multi-platform images with ko (explicit invocation only).
+    aliases: [ko-publish-controller]
+    env:
+      IMG: '{{.IMG}}'
+      PLATFORMS: '{{.PLATFORMS}}'
+      IMAGE_REFS: '{{.IMAGE_REFS}}'
+    cmds:
+      - task: generate
+      - bash hack/image.sh push
+
+  image:sign:
+    desc: Sign the immutable image reference written by image:push.
+    env:
+      IMAGE_REFS: '{{.IMAGE_REFS}}'
+    cmds:
+      - bash hack/sign-image.sh
+
+  registry:login:
+    desc: Authenticate ko with REGISTRY_USERNAME and REGISTRY_PASSWORD.
+    env:
+      REGISTRY: '{{.REGISTRY}}'
+    cmds:
+      - printf '%s' "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD is required}" | ko login "$REGISTRY" --username "${REGISTRY_USERNAME:?REGISTRY_USERNAME is required}" --password-stdin
+
+  helm:login:
+    desc: Authenticate Helm with REGISTRY_USERNAME and REGISTRY_PASSWORD.
+    env:
+      REGISTRY: '{{.REGISTRY}}'
+    cmds:
+      - printf '%s' "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD is required}" | helm registry login "$REGISTRY" --username "${REGISTRY_USERNAME:?REGISTRY_USERNAME is required}" --password-stdin
+
+  build-installer:
+    desc: Render an installer without editing source manifests.
+    env:
+      IMG: '{{.IMG}}'
+      KUSTOMIZE: kustomize
+    cmds:
+      - task: manifests
+      - mkdir -p dist
+      - ./hack/render-installer.sh > dist/install.yaml
+
+  install:
+    desc: Install CRDs into the current kubeconfig context.
+    cmds:
+      - task: manifests
+      - kustomize build config/crd | kubectl apply -f -
+
+  uninstall:
+    desc: Delete CRDs and their resources from the current context.
+    cmds:
+      - task: manifests
+      - kustomize build config/crd | kubectl delete --ignore-not-found -f -
+
+  deploy:
+    desc: Deploy into the current kubeconfig context.
+    cmds:
+      - task: build-installer
+      - kubectl apply -f dist/install.yaml
+
+  undeploy:
+    desc: Remove the controller and CRDs from the current context.
+    cmds:
+      - kustomize build config/default | kubectl delete --ignore-not-found -f -
+
+  e2e:
+    desc: Build and deploy through dev:deploy in isolated Kind, then run e2e tests.
+    aliases: [test-e2e]
+    env:
+      KIND: kind
+      KUBECTL: kubectl
+      KIND_CLUSTER: '{{.KIND_CLUSTER}}'
+      KIND_NODE_IMAGE: '{{.KIND_NODE_IMAGE}}'
+      IMG: '{{.IMG}}'
+      ARTIFACTS: '{{.ARTIFACTS}}'
+      IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE}}'
+    cmds:
+      - ./hack/e2e.sh
+
+  helm:lint:
+    desc: Validate Helm packaging.
+    aliases: [helm-lint]
+    cmds:
+      - task: manifests
+      - helm lint charts/change-windows --strict
+
+  helm:docs:
+    desc: Generate chart documentation from values and the chart README template.
+    cmds:
+      - helm-docs --chart-search-root charts/change-windows
+
+  helm:artifacthub:
+    desc: Lint chart metadata with the Artifact Hub CLI container.
+    env:
+      CHART_DIRECTORY: '{{.ROOT_DIR}}/charts'
+    cmds:
+      - docker run --rm --volume "${CHART_DIRECTORY}:/charts:ro" --workdir /charts --entrypoint ah artifacthub/ah lint
+
+  helm:verify:
+    desc: Check chart rendering and documentation drift.
+    cmds:
+      - task: helm:lint
+      - task: helm:docs
+      - git diff --exit-code -- charts/change-windows/README.md
+      - test -z "$(git ls-files --others --exclude-standard charts/change-windows/README.md)"
+
+  helm:package:
+    desc: Package the chart using VERSION.
+    env:
+      VERSION: '{{.VERSION}}'
+    cmds:
+      - task: manifests
+      - bash hack/helm-release.sh package
+
+  helm:push:
+    desc: Publish the chart to CHART_REGISTRY (explicit invocation only).
+    env:
+      VERSION: '{{.VERSION}}'
+    cmds:
+      - task: helm:package
+      - bash hack/helm-release.sh push
+
+  release:check:
+    desc: Validate GoReleaser configuration.
+    cmds:
+      - goreleaser check
+
+  release:snapshot:
+    desc: Build release archives and SBOMs without publishing or signing.
+    cmds:
+      - task: release:check
+      - goreleaser release --snapshot --clean --skip=publish,sign --timeout 90m
+
+  release:
+    desc: Publish a tagged GitHub release (explicit invocation only).
+    cmds:
+      - task: release:check
+      - goreleaser release --clean --timeout 90m
+
+  enterprise:release:
+    desc: Publish the enterprise image and chart (use DRY_RUN=true to preview).
+    aliases: [enterprise-release]
+    cmds:
+      - task: generate
+      - task: manifests
+      - task: enterprise:publish
+        vars: {CHANNEL: enterprise}
+
+  enterprise:prerelease:
+    desc: Publish the prerelease image and chart (use DRY_RUN=true to preview).
+    aliases: [enterprise-prerelease]
+    cmds:
+      - task: generate
+      - task: manifests
+      - task: enterprise:publish
+        vars: {CHANNEL: prereleases}
+
+  enterprise:publish:
+    internal: true
+    env:
+      ENTERPRISE_VERSION: '{{.ENTERPRISE_VERSION}}'
+      ENTERPRISE_REGISTRY: '{{.ENTERPRISE_REGISTRY}}'
+      DRY_RUN: '{{.DRY_RUN}}'
+      CHANNEL: '{{.CHANNEL}}'
+    cmds:
+      - ./hack/enterprise.sh
+
+  enterprise:deploy:
+    desc: Print enterprise deployment instructions.
+    aliases: [deploy-enterprise]
+    env:
+      ENTERPRISE_VERSION: '{{.ENTERPRISE_VERSION}}'
+      ENTERPRISE_REGISTRY: '{{.ENTERPRISE_REGISTRY}}'
+      CHANNEL: enterprise
+      PRINT_DEPLOY_ONLY: 'true'
+    cmds:
+      - ./hack/enterprise.sh
+
+  enterprise:deploy-prerelease:
+    desc: Print prerelease deployment instructions.
+    aliases: [deploy-enterprise-prerelease]
+    env:
+      ENTERPRISE_VERSION: '{{.ENTERPRISE_VERSION}}'
+      ENTERPRISE_REGISTRY: '{{.ENTERPRISE_REGISTRY}}'
+      CHANNEL: prereleases
+      PRINT_DEPLOY_ONLY: 'true'
+    cmds:
+      - ./hack/enterprise.sh
+
+  check:
+    desc: Run the checks used by CI (e2e runs separately).
+    cmds:
+      - task: test:tooling
+      - task: test
+      - task: lint
+      - task: lint:config
+      - task: lint:files
+      - task: lint:yaml
+      - task: lint:actions
+      - task: lint:shell
+      - task: helm:lint
+      - task: verify-generated
+      - task: build
+      - task: build-installer
+      - task: docs:check

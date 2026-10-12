@@ -1,0 +1,7 @@
+processor:
+  ignoreTypes:
+    - ChangeWindowList$
+  ignoreFields:
+    - TypeMeta$
+render:
+  kubernetesVersion: '1.36'

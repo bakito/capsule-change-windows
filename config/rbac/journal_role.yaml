@@ -1,0 +1,21 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: journal-role
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, update, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: journal-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: journal-role
+subjects:
+  - kind: ServiceAccount
+    name: controller-manager
+    namespace: system

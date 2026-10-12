@@ -1,0 +1,67 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: development-nights
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        environment: development
+  schedules:
+    - name: nights
+      cron: "0 19 * * 1-5"
+      timeZone: Europe/Zurich
+      duration: 12h
+  targets:
+    - name: apps
+      apiVersion: apps/v1
+      kind: Deployment
+      selector:
+        matchLabels:
+          downscaling: enabled
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: change-window-executor
+  actions:
+    - name: downscale
+      targets: [apps]
+      capture:
+        replicas:
+          subresource: scale
+          path: /spec/replicas
+      onStart:
+        apply:
+          subresource: scale
+          force: true
+          template: |
+            spec:
+              replicas: 0
+      onEnd:
+        apply:
+          subresource: scale
+          template: |
+            spec:
+              replicas: {{ .captured.replicas }}
+  admission:
+    - name: freeze-scaling
+      targets: [apps]
+      operations: [UPDATE]
+      subresources: ["", scale]
+      when: Active
+      audience:
+        include:
+          - kind: Group
+            name: developers
+      matchConditions:
+        - name: replicas-changed
+          expression: "object.spec.replicas != oldObject.spec.replicas"
+      message: "Replica changes are frozen during maintenance."
+  config:
+    admission:
+      warnings:
+        - name: upcoming
+          targets: [apps]
+          operations: [CREATE, UPDATE, DELETE]
+          subresources: ["", scale]
+          when: BeforeStart
+          within: 1h
+          message: "Maintenance starts at {{ .window.start }}."

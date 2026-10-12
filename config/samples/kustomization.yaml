@@ -1,0 +1,4 @@
+# # Append samples of your project ##
+resources:
+  - addons_v1alpha1_changewindow.yaml
+  # +kubebuilder:scaffold:manifestskustomizesamples

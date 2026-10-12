@@ -1,0 +1,112 @@
+{{- $Values := $.Values.global.jobs.kubectl -}}
+
+{{- if and .Values.crds.install (not $.Values.crds.inline) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "change-windows.crds.name" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  annotations:
+    # create hook dependencies in the right order
+    "helm.sh/hook-weight": "-1"
+    {{- include "change-windows.crds.annotations" . | nindent 4 }}
+    {{- with $Values.annotations }}
+      {{- . | toYaml | nindent 4 }}
+    {{- end }}
+  labels:
+    app.kubernetes.io/component: {{ include "change-windows.crds.component" . | quote }}
+    app.kubernetes.io/name: {{ include "change-windows.crds.component" . | quote }}
+    {{- include "change-windows.labels" . | nindent 4 }}
+    {{- with $Values.labels }}
+      {{- . | toYaml | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: {{ $Values.backoffLimit }}
+  ttlSecondsAfterFinished: {{ $Values.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      name: "{{ include "change-windows.crds.name" . }}"
+      annotations:
+        {{- with $Values.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with $.Values.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app.kubernetes.io/component: {{ include "change-windows.crds.component" . | quote }}
+        app.kubernetes.io/name: {{ include "change-windows.crds.component" . | quote }}
+        {{- include "change-windows.selectorLabels" . | nindent 8 }}
+        {{- with $Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with $.Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      restartPolicy: {{ $Values.restartPolicy }}
+      {{- if $Values.podSecurityContext.enabled }}
+      securityContext: {{- omit $Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- with $Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with $Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "change-windows.crds.name" . }}
+      containers:
+      - name: crds-hook
+        image: {{ include "change-windows.jobsFullyQualifiedDockerImage" . }}
+        imagePullPolicy: {{ $Values.image.pullPolicy }}
+        {{- if $Values.securityContext.enabled }}
+        securityContext: {{- omit $Values.securityContext "enabled" | toYaml | nindent 10 }}
+        {{- end }}
+        args:
+          - apply
+          - --server-side=true
+          - --overwrite=true
+          - --force-conflicts=true
+          - --field-manager=change-windows/crd-lifecycle
+          - -f
+          - /data/
+        volumeMounts:
+{{- range $path, $_ := .Files.Glob "crds/**.yaml" }}
+        - name: {{ $path | base | trimSuffix ".yaml" | regexFind "[^_]+$" }}
+          mountPath: /data/{{ $path | base }}
+          subPath: {{ $path | base }}
+{{- end }}
+        {{- with $Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      volumes:
+{{ $currentScope := . }}
+{{- range $path, $_ := .Files.Glob "crds/**.yaml" }}
+    {{- with $currentScope }}
+      - name: {{ $path | base | trimSuffix ".yaml" | regexFind "[^_]+$" }}
+        configMap:
+          name: {{ include "change-windows.crds.name" $ }}-{{ $path | base | trimSuffix ".yaml" | regexFind "[^_]+$" }}
+          items:
+          - key: content
+            path: {{ $path | base }}
+{{- end }}
+{{- end }}
+{{- end }}

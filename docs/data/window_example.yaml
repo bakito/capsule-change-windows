@@ -1,0 +1,42 @@
+- key: namespaceSelectors
+  title: Choose the namespaces
+  path: spec.namespaceSelectors
+  description: Select development namespaces by label. Multiple selectors use OR; an empty selector selects every eligible namespace. Protected infrastructure namespaces are always excluded.
+  guide: /docs/guides/schedules
+  reference: /docs/reference/api#changewindowspec
+- key: schedules
+  title: Define the window
+  path: spec.schedules
+  description: Start at 19:00 each weekday in Europe/Zurich and stay active for 12 hours. Add more schedules when you need multiple periods; overlapping windows merge.
+  guide: /docs/guides/schedules#cron-and-time-zones
+  reference: /docs/reference/api#schedule
+- key: targets
+  title: Select the workloads
+  path: spec.targets
+  description: Give a name to Deployments labeled downscaling=enabled. Actions, denials, and warnings refer to that name. Node admission targets can instead select Node labels directly.
+  guide: /docs/guides/schedules#selection-over-time
+  reference: /docs/reference/api#target
+- key: serviceAccount
+  title: Give actions an identity
+  path: spec.serviceAccount
+  description: Apply changes as this ServiceAccount, using its Kubernetes permissions. Create the account and grant the executor RBAC before applying this example. Admission-only windows can omit it.
+  guide: /docs/guides/security#executor-permissions
+  reference: /docs/reference/api#serviceaccountreference
+- key: actions
+  title: Downscale, then restore
+  path: spec.actions
+  description: Capture the original replica count, apply zero through /scale at the start, then restore the captured count at the end. The start patch explicitly takes field ownership with force; review that choice for your workloads.
+  guide: /docs/guides/actions#downscale-and-restore
+  reference: /docs/reference/api#resourceaction
+- key: admission
+  title: Protect changes during maintenance
+  path: spec.admission
+  description: Block replica updates by members of the developers group while the window is active. CEL checks the actual Deployment or Scale payload. Other updates remain allowed by this entry, and the controller can execute its own scheduled actions.
+  guide: /docs/guides/admission#match-conditions
+  reference: /docs/reference/api#admissionrule
+- key: config
+  title: Warn users in advance
+  path: spec.config.admission.warnings
+  description: Return a warning on matching writes in the hour before maintenance starts. This warning has no audience filter, so it applies to every caller. Each warning can also define its own audience and CEL conditions.
+  guide: /docs/guides/admission#warning-periods
+  reference: /docs/reference/api#admissionwarning

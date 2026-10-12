@@ -1,0 +1,103 @@
+{{- if not .Values.crds.exclusive }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "change-windows.name" $ }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - addons.projectcapsule.dev
+  resources:
+  - changewindows
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - addons.projectcapsule.dev
+  resources:
+  - changewindows/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - addons.projectcapsule.dev
+  resources:
+  - changewindows/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - userextras/addons.projectcapsule.dev/execution
+  verbs:
+  - impersonate
+- apiGroups: [authentication.k8s.io]
+  resources: [tokenreviews]
+  verbs: [create]
+- apiGroups: [authorization.k8s.io]
+  resources: [subjectaccessreviews]
+  verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "change-windows.name" $ }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "change-windows.name" $ }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "change-windows.serviceAccountName" $ }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get, create, update, delete]
+- apiGroups: [coordination.k8s.io]
+  resources: [leases]
+  verbs: [get, list, watch, create, update, patch, delete]
+- apiGroups: [""]
+  resources: [events]
+  verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "change-windows.name" $ }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "change-windows.serviceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}

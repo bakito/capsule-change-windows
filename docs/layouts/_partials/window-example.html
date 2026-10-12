@@ -1,0 +1,63 @@
+{{- $source := resources.Get "examples/quickstart.yaml" -}}
+{{- $sections := hugo.Data.window_example -}}
+{{- $links := dict -}}
+{{- range $sections -}}
+  {{- $links = merge $links (dict (printf "  %s:" .key) .) -}}
+{{- end -}}
+{{- $segments := slice -}}
+{{- $lines := slice -}}
+{{- $active := dict -}}
+{{- $seen := slice -}}
+{{- range split (strings.TrimSuffix "\n" $source.Content) "\n" -}}
+  {{- with index $links . -}}
+    {{- if in $seen .key -}}{{- errorf "Repeated homepage example field %s" .key -}}{{- end -}}
+    {{- $segments = $segments | append (dict "lines" $lines "section" $active) -}}
+    {{- $lines = slice -}}
+    {{- $active = . -}}
+    {{- $seen = $seen | append .key -}}
+  {{- end -}}
+  {{- $lines = $lines | append . -}}
+{{- end -}}
+{{- $segments = $segments | append (dict "lines" $lines "section" $active) -}}
+{{- if ne (len $seen) (len $sections) -}}{{- errorf "Homepage example annotations do not match quickstart.yaml" -}}{{- end -}}
+<section class="section container window-example" aria-labelledby="window-example-title" data-window-example>
+  <div class="window-example__intro">
+    <p class="text-muted text-uppercase small fw-semibold">One resource. A complete window.</p>
+    <h2 id="window-example-title">See what a ChangeWindow does</h2>
+    <p>Select a YAML block to explore its configuration and open the matching reference.</p>
+  </div>
+  <div class="window-example__toolbar">
+    <span><strong>quickstart.yaml</strong><span class="window-example__kind">ChangeWindow · development-nights</span></span>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-outline-secondary btn-sm" type="button" data-window-copy hidden>Copy YAML</button>
+      <a class="btn btn-primary btn-sm" href="{{ "examples/quickstart.yaml" | relURL }}" download="quickstart.yaml">Download YAML</a>
+    </div>
+  </div>
+  <div class="window-example__body">
+    <pre class="window-example__yaml" tabindex="0" aria-label="Complete ChangeWindow YAML"><code data-window-source>{{- range $segments -}}
+      {{- $chunk := printf "%s\n" (delimit .lines "\n") -}}
+      {{- with .section -}}
+        <a class="window-example__block" href="{{ relref $ .reference }}" data-window-part="{{ .key }}" aria-controls="window-help-{{ .key }}" aria-label="{{ .path }}: {{ .title }}">{{ partial "window-example/code.html" $chunk }}</a>
+      {{- else -}}
+        {{- partial "window-example/code.html" $chunk -}}
+      {{- end -}}
+    {{- end -}}</code></pre>
+    <aside class="window-example__help" aria-label="Configuration explanation" aria-live="polite">
+      {{ range $index, $section := $sections }}
+      <div id="window-help-{{ .key }}" data-window-help="{{ .key }}" {{ if ne $index 0 }}hidden{{ end }}>
+        <span class="window-example__step">{{ add $index 1 }} / {{ len $sections }}</span>
+        <p class="window-example__path"><code>{{ .path }}</code></p>
+        <h3 class="h4">{{ .title }}</h3>
+        <p>{{ .description }}</p>
+        <div class="window-example__links">
+          <a href="{{ relref $ .guide }}">Read the guide →</a>
+          <a href="{{ relref $ .reference }}">API reference →</a>
+        </div>
+      </div>
+      {{ end }}
+      <p class="window-example__setup">Adapt the labels and identity to your cluster. <a href="{{ relref . "/docs/guides/security#executor-permissions" }}">Set up executor permissions</a> before applying.</p>
+      <a href="{{ relref . "/docs/examples" }}">Browse more examples →</a>
+    </aside>
+  </div>
+  <p class="window-example__status small text-muted" role="status" data-window-copy-status></p>
+</section>

@@ -1,0 +1,13 @@
+# Exercise standalone ChangeWindows in namespaces without Capsule tenant labels.
+webhooks:
+  hooks:
+    resources:
+      namespaceSelector:
+        matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: NotIn
+            values:
+              - '{{ .Release.Namespace }}'
+              - kube-system
+              - kube-public
+              - kube-node-lease

@@ -1,0 +1,35 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: weekly-maintenance
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        maintenance: enabled
+  schedules:
+    - name: sunday
+      cron: "0 2 * * 0"
+      timeZone: UTC
+      duration: 2h
+  targets:
+    - name: deployments
+      apiVersion: apps/v1
+      kind: Deployment
+  admission:
+    - name: freeze
+      targets: [deployments]
+      operations: [CREATE, UPDATE, DELETE]
+      subresources: ["", scale]
+      when: Active
+      action: Deny
+      message: "Maintenance is active. Retry after {{ .window.end }}."
+  config:
+    admission:
+      warnings:
+        - name: upcoming
+          targets: [deployments]
+          operations: [CREATE, UPDATE, DELETE]
+          subresources: ["", scale]
+          when: BeforeStart
+          within: 1h
+          message: "Maintenance begins at {{ .window.start }} (in {{ .window.startsIn }})."

@@ -1,0 +1,43 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: after-hours
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        environment: development
+  schedules:
+    - name: every-night
+      cron: "0 19 * * *"
+      timeZone: Europe/Zurich
+      duration: 12h
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: after-hours-executor
+  targets:
+    - name: deployments
+      apiVersion: apps/v1
+      kind: Deployment
+    - name: statefulsets
+      apiVersion: apps/v1
+      kind: StatefulSet
+  actions:
+    - name: sleep-and-resume
+      targets: [deployments, statefulsets]
+      capture:
+        replicas:
+          subresource: scale
+          path: /spec/replicas
+      onStart:
+        apply:
+          subresource: scale
+          force: true
+          template: |
+            spec:
+              replicas: 0
+      onEnd:
+        apply:
+          subresource: scale
+          template: |-
+            spec:
+              replicas: {{ .captured.replicas }}

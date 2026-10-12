@@ -1,0 +1,109 @@
+{{- $values := omit .Values "webhooks" -}}
+{{- $_ := set $values "webhooks" (include "change-windows.webhooks.renderValue" (dict "value" .Values.webhooks "ctx" $ "path" "webhooks") | mustFromJson) -}}
+{{- $ := set (omit . "Values") "Values" $values -}}
+{{- with $ }}
+{{- if not .Values.crds.exclusive }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "change-windows.name" $ }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "change-windows.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ .Values.manager.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "change-windows.selectorLabels" . | nindent 8 }}
+  template:
+    metadata:
+      annotations:
+      {{- with .Values.manager.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.crds.install }}
+        projectcapsule.dev/crds-size-hash: {{ include "change-windows.crds.hash" . | quote }}
+      {{- end }}
+      labels:
+        {{- include "change-windows.selectorLabels" . | nindent 8 }}
+        {{- with .Values.manager.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "change-windows.serviceAccountName" . }}
+      {{- if $.Values.manager.podSecurityContext.enabled }}
+      securityContext: {{- omit $.Values.manager.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      priorityClassName: {{ .Values.manager.priorityClassName }}
+      {{- with .Values.manager.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.manager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.manager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.manager.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if not .Values.manager.hostUsers }}
+      hostUsers: {{ .Values.manager.hostUsers }}
+      {{- end }}
+      containers:
+      - name: manager
+        image: {{ default (printf "%s/%s:%s" .Values.manager.image.registry .Values.manager.image.repository (.Values.manager.image.tag | default .Chart.AppVersion)) .Values.manager.image.reference | quote }}
+        imagePullPolicy: {{ .Values.manager.image.pullPolicy }}
+        args:
+        - --metrics-bind-address=:8443
+        - --metrics-cert-path=/tmp/k8s-webhook-server/serving-certs
+        - --health-probe-bind-address=:8081
+        {{- with .Values.manager.args.extra }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        {{- with .Values.manager.env }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        ports:
+        {{- if .Values.manager.args.pprof }}
+        - name: pprof
+          containerPort: 8082
+          protocol: TCP
+        {{- end }}
+        - name: webhook
+          containerPort: 9443
+        - name: metrics
+          containerPort: 8443
+        {{- if $.Values.manager.securityContext.enabled }}
+        securityContext: {{- omit $.Values.manager.securityContext "enabled" | toYaml | nindent 10 }}
+        {{- end }}
+        livenessProbe:
+          {{- toYaml .Values.manager.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.manager.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.manager.resources | nindent 10 }}
+        volumeMounts:
+        - name: webhook-cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+      volumes:
+      - name: webhook-cert
+        secret:
+          secretName: {{ include "change-windows.webhooks.secret" $ | quote }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,5 @@
+{
+  "extends": "@kinvolk/headlamp-plugin/config/plugins-tsconfig.json",
+  "compilerOptions": { "ignoreDeprecations": "6.0", "resolveJsonModule": true, "lib": ["es2022", "dom", "dom.iterable"] },
+  "include": ["./src/**/*"]
+}

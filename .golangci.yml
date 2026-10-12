@@ -1,0 +1,30 @@
+version: "2"
+run:
+  timeout: 5m
+  allow-parallel-runners: true
+linters:
+  default: standard
+  enable:
+    - copyloopvar
+    - goheader
+    - misspell
+    - unconvert
+  settings:
+    goheader:
+      template: |-
+        Copyright 2026 Project Capsule Authors
+        SPDX-License-Identifier: Apache-2.0
+  exclusions:
+    generated: strict
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/projectcapsule/schedule-action-controller)
+    gofumpt:
+      module-path: github.com/projectcapsule/schedule-action-controller

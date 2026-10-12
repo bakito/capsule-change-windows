@@ -1,0 +1,75 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: development-downtime
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        environment: development
+    - matchLabels:
+        environment: staging
+  schedules:
+    - name: weekday-nights
+      cron: "0 19 * * 1-5"
+      timeZone: Europe/Zurich
+      duration: 12h
+    - name: weekend
+      cron: "0 7 * * 6"
+      timeZone: Europe/Zurich
+      duration: 48h
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: change-window-executor
+  targets:
+    - name: deployments
+      apiVersion: apps/v1
+      kind: Deployment
+      selector:
+        matchLabels:
+          downscaling: enabled
+  actions:
+    - name: downscale
+      targets: [deployments]
+      capture:
+        replicas:
+          subresource: scale
+          path: /spec/replicas
+      onStart:
+        apply:
+          subresource: scale
+          force: true
+          template: |
+            spec:
+              replicas: 0
+      onEnd:
+        apply:
+          subresource: scale
+          template: |
+            spec:
+              replicas: {{ .captured.replicas }}
+  admission:
+    - name: freeze-deployments
+      targets: [deployments]
+      operations: [CREATE, UPDATE, DELETE]
+      subresources: ["", scale]
+      when: Active
+      action: Deny
+      message: >-
+        Deployment changes are blocked during maintenance. Retry after {{ .window.end }}.
+  config:
+    admission:
+      warnings:
+        - name: upcoming-maintenance
+          targets: [deployments]
+          operations: [CREATE, UPDATE, DELETE]
+          subresources: ["", scale]
+          when: BeforeStart
+          within: 1h
+          message: >-
+            Maintenance starts at {{ .window.start }} (in {{ .window.startsIn }}).
+        - name: active-maintenance
+          targets: [deployments]
+          operations: [CREATE, UPDATE, DELETE]
+          subresources: ["", scale]
+          when: Active
+          message: Maintenance is active until {{ .window.end }}.

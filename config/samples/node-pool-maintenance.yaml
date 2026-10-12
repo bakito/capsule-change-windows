@@ -1,0 +1,51 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: worker-pool-maintenance
+spec:
+  schedules:
+    - name: sunday
+      cron: "0 2 * * 0"
+      timeZone: UTC
+      duration: 2h
+  targets:
+    - name: worker-pool
+      apiVersion: v1
+      kind: Node
+      selector:
+        matchLabels:
+          nodepool.example.com/name: workers
+  admission:
+    - name: freeze-nodes
+      targets: [worker-pool]
+      operations: [CREATE, UPDATE, DELETE]
+      audience:
+        include:
+          - kind: User
+            name: node-operator
+          - kind: Group
+            name: platform-developers
+          - kind: ServiceAccount
+            name: deployer
+            namespace: platform
+        exclude:
+          - kind: User
+            name: break-glass
+      when: Active
+      message: "Worker pool maintenance is active until {{ .window.end }}."
+  config:
+    admission:
+      warnings:
+        - name: upcoming
+          targets: [worker-pool]
+          operations: [CREATE, UPDATE, DELETE]
+          audience:
+            include:
+              - kind: Group
+                name: platform-developers
+            exclude:
+              - kind: User
+                name: break-glass
+          when: BeforeStart
+          within: 1h
+          message: "Worker pool maintenance begins at {{ .window.start }}."

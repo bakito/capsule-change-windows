@@ -1,0 +1,91 @@
+minimum_prek_version = "0.5.5"
+default_install_hook_types = ["pre-commit", "commit-msg"]
+default_stages = ["pre-commit"]
+exclude = '^(\.devbox/|\.task/|bin/|dist/|artifacts/|builds/)'
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "check-executables-have-shebangs", groups = ["files"], priority = 10 },
+  { id = "end-of-file-fixer", args = ["--check"], groups = ["files"], priority = 10 },
+  { id = "trailing-whitespace", args = ["--check"], groups = ["files"], priority = 10 },
+  { id = "check-merge-conflict", groups = ["files"], priority = 10 },
+  { id = "check-json", groups = ["files"], priority = 10 },
+  { id = "check-toml", groups = ["files"], priority = 10 },
+  { id = "check-yaml", args = ["--allow-multiple-documents"], exclude = '^charts/[^/]+/templates/', groups = ["files"], priority = 10 },
+]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "generated"
+name = "Generate API code and manifests"
+entry = "bash hack/dev-tool.sh task generate manifests"
+language = "system"
+files = '^(api/|internal/|go\.(mod|sum)$|hack/boilerplate.go.txt$)'
+pass_filenames = false
+require_serial = true
+priority = 0
+
+[[repos.hooks]]
+id = "golangci-lint"
+name = "Lint Go sources"
+entry = "bash hack/dev-tool.sh task lint"
+language = "system"
+types = ["go"]
+pass_filenames = false
+priority = 20
+
+[[repos.hooks]]
+id = "go-test"
+name = "Run Go unit tests"
+entry = "bash hack/dev-tool.sh task test:unit"
+language = "system"
+types = ["go"]
+pass_filenames = false
+priority = 30
+
+[[repos.hooks]]
+id = "yamlfmt"
+name = "Check YAML formatting"
+entry = "bash hack/dev-tool.sh yamlfmt -lint"
+language = "system"
+types = ["yaml"]
+exclude = '^(charts/[^/]+/(templates|crds|files)/|config/crd/bases/|config/rbac/role.yaml$)'
+priority = 10
+
+[[repos.hooks]]
+id = "actionlint"
+name = "Validate GitHub Actions"
+entry = "bash hack/dev-tool.sh task lint:actions"
+language = "system"
+files = '^\.github/workflows/.*\.ya?ml$'
+pass_filenames = false
+priority = 20
+
+[[repos.hooks]]
+id = "shellcheck"
+name = "Check shell scripts"
+entry = "bash hack/dev-tool.sh task lint:shell"
+language = "system"
+files = '^hack/.*\.sh$'
+pass_filenames = false
+priority = 20
+
+[[repos.hooks]]
+id = "docs"
+name = "Validate documentation and generated API reference"
+entry = "bash hack/dev-tool.sh task docs:check"
+language = "system"
+files = '^(docs/|api/|config/samples/|hack/docs/|hack/(docs-api|check-hugo)\.sh$|hack/tools/)'
+pass_filenames = false
+priority = 40
+
+[[repos.hooks]]
+id = "conventional-commit"
+name = "Check Conventional Commit message"
+entry = "bash hack/dev-tool.sh cog verify --ignore-merge-commits --file"
+language = "system"
+stages = ["commit-msg"]
+priority = 10

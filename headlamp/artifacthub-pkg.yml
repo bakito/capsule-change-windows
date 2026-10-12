@@ -1,0 +1,12 @@
+name: capsule-change-windows
+displayName: Capsule Change Windows
+description: Calendar, scheduled Kubernetes actions, and active maintenance windows for Headlamp.
+version: 0.0.0
+license: Apache-2.0
+homeURL: https://projectcapsule.github.io/schedule-action-controller/
+links:
+  - name: Source
+    url: https://github.com/projectcapsule/schedule-action-controller
+annotations:
+  headlamp/plugin/version-compat: '>=0.45.0'
+  headlamp/plugin/distro-compat: 'in-cluster,web'

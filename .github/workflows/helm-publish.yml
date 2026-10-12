@@ -1,0 +1,80 @@
+name: Publish charts
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  publish-helm:
+    # Skip this Release on forks
+    if: github.repository_owner == 'projectcapsule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
+      - name: Validate release version
+        id: extract_version
+        run: devbox run -- task ci:version
+      - name: Package chart
+        run: devbox run -- task helm:package
+        env:
+          VERSION: ${{ steps.extract_version.outputs.version }}
+      - name: Publish Helm chart
+        uses: stefanprodan/helm-gh-pages@0ad2bb377311d61ac04ad9eb6f252fb68e207260 # v1.7.0
+        with:
+          token: "${{ secrets.HELM_CHARTS_PUSH_TOKEN }}"
+          linting: off
+          chart_version: ${{ steps.extract_version.outputs.version }}
+          app_version: ${{ steps.extract_version.outputs.version }}
+          charts_dir: charts
+          charts_url: https://${{ github.repository_owner }}.github.io/charts
+          owner: ${{ github.repository_owner }}
+          repository: charts
+          branch: gh-pages
+          commit_username: ${{ github.actor }}
+  publish-helm-oci:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    outputs:
+      image: ${{ steps.chart.outputs.image }}
+      digest: ${{ steps.chart.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - id: version
+        run: devbox run -- task ci:version
+      - name: Authenticate registry
+        run: devbox run -- task helm:login
+        env:
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package and publish chart
+        run: devbox run -- task helm:push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CHART_REGISTRY: oci://ghcr.io/${{ github.repository_owner }}/charts
+      - name: Export chart digest
+        id: chart
+        run: devbox run -- task ci:image IMAGE_REFS=dist/chart-refs.txt
+      - name: Sign chart
+        run: devbox run -- task image:sign IMAGE_REFS=dist/chart-refs.txt
+  helm-provenance:
+    needs: publish-helm-oci
+    permissions:
+      id-token: write
+      packages: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      image: ${{ needs.publish-helm-oci.outputs.image }}
+      digest: ${{ needs.publish-helm-oci.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

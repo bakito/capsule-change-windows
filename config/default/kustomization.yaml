@@ -1,0 +1,12 @@
+namespace: schedule-action-controller-system
+namePrefix: schedule-action-controller-
+resources:
+  - ../crd
+  - ../rbac
+  - ../manager
+  - ../webhook
+  - metrics_service.yaml
+patches:
+  - path: manager_metrics_patch.yaml
+    target:
+      kind: Deployment

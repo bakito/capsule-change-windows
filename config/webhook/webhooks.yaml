@@ -1,0 +1,51 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+  annotations:
+    cert-manager.io/inject-ca-from: schedule-action-controller-system/schedule-action-controller-serving-cert
+webhooks:
+  - name: resources.addons.projectcapsule.dev
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    matchPolicy: Exact
+    timeoutSeconds: 5
+    clientConfig:
+      service:
+        name: webhook-service
+        namespace: system
+        path: /validate-resources
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [schedule-action-controller-system, kube-system, kube-public, kube-node-lease]
+    rules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: ["*/*"]
+        scope: Namespaced
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [nodes]
+        scope: Cluster
+  - name: changewindows.addons.projectcapsule.dev
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    matchPolicy: Exact
+    timeoutSeconds: 5
+    clientConfig:
+      service:
+        name: webhook-service
+        namespace: system
+        path: /validate-changewindow
+    rules:
+      - apiGroups: [addons.projectcapsule.dev]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [changewindows]
+        scope: Cluster

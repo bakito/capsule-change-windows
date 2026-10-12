@@ -1,0 +1,32 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  name: tenant-maintenance
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        maintenance: enabled
+  schedules:
+    - name: sunday
+      cron: "0 2 * * 0"
+      timeZone: Europe/Zurich
+      duration: 2h
+  targets:
+    - name: all-resources
+      apiVersion: "*"
+      kind: "*"
+  admission:
+    - name: freeze-except-pods
+      targets: [all-resources]
+      operations: [CREATE, UPDATE, DELETE]
+      subresources: ["", "*"]
+      audience:
+        include:
+          - kind: Group
+            name: tenant-developers
+      matchConditions:
+        - name: not-a-pod
+          expression: "!(request.resource.group == '' && request.resource.resource == 'pods')"
+      when: Active
+      action: Deny
+      message: "Tenant maintenance is active. Only Pod changes are allowed for your group."
