@@ -13,6 +13,9 @@ document.querySelectorAll('[data-window-example]').forEach(example => {
     if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) return;
+    // In the stacked mobile layout, follow the guide instead of updating a panel
+    // below the YAML. Keep this breakpoint aligned with _custom.scss.
+    if (window.matchMedia('(max-width: 767.98px)').matches) return;
     event.preventDefault();
     select(block.dataset.windowPart);
   }));

@@ -126,6 +126,7 @@ target = "static/crds"
   mainSections = ['docs']
   footer = 'Project Capsule · Built with <a href="https://getdoks.org/">Doks</a>'
 [params.doks]
+  bootstrapJavascript = true
   colorMode = 'auto'
   colorModeToggler = true
   navbarSticky = true

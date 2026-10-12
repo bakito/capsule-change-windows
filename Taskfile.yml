@@ -738,6 +738,96 @@ tasks:
     cmds:
       - printf '%s' "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD is required}" | helm registry login "$REGISTRY" --username "${REGISTRY_USERNAME:?REGISTRY_USERNAME is required}" --password-stdin
 
+  playground:
+    desc: Run a disposable Kind playground with Headlamp for up to 30 minutes, then delete it.
+    env:
+      PLAYGROUND_CLUSTER: '{{.PLAYGROUND_CLUSTER | default "change-windows-playground"}}'
+      PLAYGROUND_MINUTES: '{{.PLAYGROUND_MINUTES | default "30"}}'
+      PLAYGROUND_PORT: '{{.PLAYGROUND_PORT | default "18081"}}'
+      KIND_NODE_IMAGE: '{{.KIND_NODE_IMAGE}}'
+    cmds:
+      - |
+        bash -euo pipefail <<'BASH'
+        umask 077
+        [[ "$PLAYGROUND_MINUTES" =~ ^([1-9]|[12][0-9]|30)$ ]] || { echo 'PLAYGROUND_MINUTES must be between 1 and 30' >&2; exit 1; }
+        if [[ ! "$PLAYGROUND_PORT" =~ ^[1-9][0-9]{0,4}$ ]] || (( PLAYGROUND_PORT > 65535 )); then
+          echo 'Invalid PLAYGROUND_PORT' >&2; exit 1
+        fi
+        [[ "$PLAYGROUND_CLUSTER" =~ ^[a-z0-9][a-z0-9-]{0,50}[a-z0-9]$ ]] || { echo 'Invalid PLAYGROUND_CLUSTER' >&2; exit 1; }
+        clusters=$(kind get clusters)
+        if grep -Fxq "$PLAYGROUND_CLUSTER" <<< "$clusters"; then
+          echo "Refusing to reuse or delete existing cluster $PLAYGROUND_CLUSTER" >&2
+          exit 1
+        fi
+        # Check the local listener before any expensive builds or cluster creation.
+        node -e 'const s = require("node:net").createServer(); s.on("error", e => { console.error(e.message); process.exit(1); }); s.listen(Number(process.argv[1]), "127.0.0.1", () => s.close());' "$PLAYGROUND_PORT"
+        temp=$(mktemp -d)
+        export KUBECONFIG="$temp/kubeconfig"
+        cluster_started=false
+        forward_pid=''
+        cleanup() {
+          result=$?
+          trap - EXIT INT TERM
+          if [[ -n "$forward_pid" ]]; then
+            kill "$forward_pid" 2>/dev/null || true
+            wait "$forward_pid" 2>/dev/null || true
+          fi
+          if [[ "$cluster_started" == true ]]; then
+            kind delete cluster --name "$PLAYGROUND_CLUSTER" || result=1
+          fi
+          rm -rf "$temp"
+          exit "$result"
+        }
+        trap cleanup EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+
+        task headlamp:install headlamp:build
+        mkdir -p "$temp/plugins/capsule-change-windows"
+        cp headlamp/dist/main.js headlamp/dist/package.json "$temp/plugins/capsule-change-windows/"
+        chmod -R a+rX "$temp/plugins"
+        # JSON is valid YAML and safely quotes the host path, including spaces.
+        node -e 'console.log(JSON.stringify({kind: "Cluster", apiVersion: "kind.x-k8s.io/v1alpha4", nodes: [{role: "control-plane", extraMounts: [{hostPath: process.argv[1], containerPath: "/opt/change-windows-plugins", readOnly: true}]}]}))' "$temp/plugins" > "$temp/kind.json"
+        cluster_started=true
+        kind create cluster --name "$PLAYGROUND_CLUSTER" --image "$KIND_NODE_IMAGE" --config "$temp/kind.json" --kubeconfig "$KUBECONFIG" --wait 120s
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
+        for deployment in cert-manager cert-manager-webhook cert-manager-cainjector; do
+          kubectl -n cert-manager rollout status "deployment/$deployment" --timeout=120s
+        done
+        export DEV_CONTEXT="kind-$PLAYGROUND_CLUSTER"
+        export DEV_NAMESPACE=schedule-action-controller-system
+        export DEV_RELEASE=change-windows
+        export DEV_IMAGE_MODE=kind
+        export DEV_KIND_CLUSTER="$PLAYGROUND_CLUSTER"
+        export DEV_HELM_VALUES=hack/playground/operator-values.yaml
+        export IMG=change-windows:playground
+        export IMAGE_ARCHIVE="$temp/controller.tar"
+        task dev:deploy
+        kubectl apply -f hack/playground/resources.yaml -f examples/executor-rbac.yaml
+        kubectl apply -f hack/playground/window.yaml
+        kubectl wait changewindow/playground --for=condition=Ready --timeout=120s
+        helm upgrade --install headlamp headlamp --repo https://kubernetes-sigs.github.io/headlamp/ --version 0.45.0 \
+          --namespace kube-system --values hack/playground/headlamp-values.yaml --wait --timeout 180s
+        kubectl -n kube-system rollout status deployment/headlamp --timeout=120s
+        kubectl -n kube-system port-forward service/headlamp "$PLAYGROUND_PORT:80" --address=127.0.0.1 > "$temp/forward.log" 2>&1 &
+        forward_pid=$!
+        url="http://127.0.0.1:$PLAYGROUND_PORT"
+        deadline=$((SECONDS + 60))
+        until curl --fail --silent --show-error --max-time 5 "$url/plugins/capsule-change-windows/main.js" -o "$temp/main.js"; do
+          if ! kill -0 "$forward_pid" 2>/dev/null || (( SECONDS >= deadline )); then cat "$temp/forward.log" >&2; exit 1; fi
+          sleep 1
+        done
+        cmp headlamp/dist/main.js "$temp/main.js"
+        printf '\nPlayground ready: %s\nCluster: %s\nExpires in %s minutes. Ctrl+C also deletes it.\n' "$url" "$PLAYGROUND_CLUSTER" "$PLAYGROUND_MINUTES"
+        # Start the usable lifetime after all components and the current plugin are ready.
+        deadline=$(( $(date +%s) + PLAYGROUND_MINUTES * 60 ))
+        while (( $(date +%s) < deadline )); do
+          if ! kill -0 "$forward_pid" 2>/dev/null; then cat "$temp/forward.log" >&2; exit 1; fi
+          sleep 1 &
+          wait $!
+        done
+        BASH
+
   e2e:
     desc: Build and deploy through dev:deploy in isolated Kind, then run e2e tests.
     aliases: [test-e2e]

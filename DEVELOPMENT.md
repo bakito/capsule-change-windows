@@ -438,3 +438,16 @@ Private-repository SARIF uploads require GitHub Code Security/Advanced Security
 with code scanning enabled. Private results are retained as a workflow artifact
 and sent to repository code scanning, without publishing them to Scorecard's
 public service. See [Scorecard setup and private repository permissions](https://github.com/ossf/scorecard-action/blob/v2.4.4/README.md#additional-permissions-for-private-repositories).
+
+## Temporary playground
+
+`devbox run -- task playground` creates a fresh Kind cluster with the current ko
+controller build, Headlamp, the current plugin, and a cycling downscale example.
+It serves Headlamp at `http://127.0.0.1:18081` for 30 minutes after readiness, then
+removes the cluster, private kubeconfig, port-forward and staged plugin. Ctrl+C
+also cleans up. `PLAYGROUND_MINUTES` accepts 1–30; `PLAYGROUND_PORT` and
+`PLAYGROUND_CLUSTER` choose a free port and a new cluster name. Existing clusters
+and the developer's current context are preserved.
+
+See the [playground guide](docs/content/docs/development/playground.md) for the
+demo identity's permissions and an example maintenance cycle.

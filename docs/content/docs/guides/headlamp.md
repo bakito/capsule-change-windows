@@ -74,3 +74,9 @@ scheduling, selection, owner identity and UI error states. Browser tests load th
 bundle in Headlamp with intercepted fixtures, requiring no policy changes or
 credentials. See `headlamp/README.md` for browser setup, permission details, and
 performance checks.
+
+## Try a temporary playground
+
+The [playground]({{< relref "/docs/development/playground" >}}) installs the
+operator, Headlamp and this plugin together in a disposable Kind cluster. Run it
+locally for up to 30 minutes; it cleans itself up when the timer expires.

@@ -1,0 +1,10 @@
+# Standalone demo: limit admission to the demo namespace, without a Capsule tenant.
+serviceAccount:
+  name: schedule-action-controller-controller-manager
+webhooks:
+  hooks:
+    resources:
+      namespaceSelector:
+        matchExpressions: []
+        matchLabels:
+          kubernetes.io/metadata.name: development

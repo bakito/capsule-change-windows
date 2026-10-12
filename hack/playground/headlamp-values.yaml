@@ -1,0 +1,19 @@
+# Only for the disposable playground, reached through localhost or private Tailscale.
+# All visitors share the limited demo identity. Never expose this on a public URL.
+fullnameOverride: headlamp
+config:
+  unsafeUseServiceAccountToken: true
+  pluginsDir: /headlamp/plugins
+clusterRoleBinding:
+  create: false
+serviceAccount:
+  name: headlamp
+volumes:
+  - name: local-plugin
+    hostPath:
+      path: /opt/change-windows-plugins
+      type: Directory
+volumeMounts:
+  - name: local-plugin
+    mountPath: /headlamp/plugins
+    readOnly: true

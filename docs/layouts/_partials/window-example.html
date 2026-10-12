@@ -24,7 +24,7 @@
   <div class="window-example__intro">
     <p class="text-muted text-uppercase small fw-semibold">One resource. A complete window.</p>
     <h2 id="window-example-title">See what a ChangeWindow does</h2>
-    <p>Select a YAML block to explore its configuration and open the matching reference.</p>
+    <p>Select a YAML block to explore its configuration. On mobile, tap a block to open its guide.</p>
   </div>
   <div class="window-example__toolbar">
     <span><strong>quickstart.yaml</strong><span class="window-example__kind">ChangeWindow · development-nights</span></span>
@@ -37,7 +37,7 @@
     <pre class="window-example__yaml" tabindex="0" aria-label="Complete ChangeWindow YAML"><code data-window-source>{{- range $segments -}}
       {{- $chunk := printf "%s\n" (delimit .lines "\n") -}}
       {{- with .section -}}
-        <a class="window-example__block" href="{{ relref $ .reference }}" data-window-part="{{ .key }}" aria-controls="window-help-{{ .key }}" aria-label="{{ .path }}: {{ .title }}">{{ partial "window-example/code.html" $chunk }}</a>
+        <a class="window-example__block" href="{{ relref $ .guide }}" data-window-part="{{ .key }}" aria-controls="window-help-{{ .key }}" aria-label="{{ .path }}: {{ .title }}">{{ partial "window-example/code.html" $chunk }}</a>
       {{- else -}}
         {{- partial "window-example/code.html" $chunk -}}
       {{- end -}}
