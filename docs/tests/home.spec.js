@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-const source = await readFile(new URL('../../config/samples/quickstart.yaml', import.meta.url), 'utf8');
+const source = await readFile(new URL('../../examples/quickstart.yaml', import.meta.url), 'utf8');
 
 test('business overview explains the project before the configuration example', async ({ page }) => {
   await page.goto('');

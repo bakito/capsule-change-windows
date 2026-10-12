@@ -7,7 +7,7 @@ on:
       - 'api/**'
       - 'cmd/**'
       - 'internal/**'
-      - 'config/**'
+      - 'examples/**'
       - 'charts/**'
       - 'e2e/**'
       - 'hack/**'

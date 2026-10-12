@@ -102,13 +102,13 @@ publishDir = '../dist/docs'
   target = "static"
 
 [[module.mounts]]
-source = "../config/samples"
+source = "../examples"
 target = "assets/examples"
 [[module.mounts]]
-source = "../config/samples"
+source = "../examples"
 target = "static/examples"
 [[module.mounts]]
-source = "../config/crd/bases"
+source = "../charts/change-windows/crds"
 target = "static/crds"
 
 [markup.highlight]

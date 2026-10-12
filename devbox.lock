@@ -779,54 +779,6 @@
         }
       }
     },
-    "kustomize@5.7.1": {
-      "last_modified": "2025-10-22T20:59:19Z",
-      "resolved": "github:NixOS/nixpkgs/01b6809f7f9d1183a2b3e081f0a1e6f8f415cb09#kustomize",
-      "source": "devbox-search",
-      "version": "5.7.1",
-      "systems": {
-        "aarch64-darwin": {
-          "outputs": [
-            {
-              "name": "out",
-              "path": "/nix/store/jvl8sm5fdaxq9qmvvnnwdjgapnflxc6z-kustomize-5.7.1",
-              "default": true
-            }
-          ],
-          "store_path": "/nix/store/jvl8sm5fdaxq9qmvvnnwdjgapnflxc6z-kustomize-5.7.1"
-        },
-        "aarch64-linux": {
-          "outputs": [
-            {
-              "name": "out",
-              "path": "/nix/store/yavzhdcg0wzl50gmv8fch00kihjc55rf-kustomize-5.7.1",
-              "default": true
-            }
-          ],
-          "store_path": "/nix/store/yavzhdcg0wzl50gmv8fch00kihjc55rf-kustomize-5.7.1"
-        },
-        "x86_64-darwin": {
-          "outputs": [
-            {
-              "name": "out",
-              "path": "/nix/store/zv2q7j235adv16p3bizywn5z3vdsnasv-kustomize-5.7.1",
-              "default": true
-            }
-          ],
-          "store_path": "/nix/store/zv2q7j235adv16p3bizywn5z3vdsnasv-kustomize-5.7.1"
-        },
-        "x86_64-linux": {
-          "outputs": [
-            {
-              "name": "out",
-              "path": "/nix/store/c24nyixhy98p4as6fc9282g873lmlv8v-kustomize-5.7.1",
-              "default": true
-            }
-          ],
-          "store_path": "/nix/store/c24nyixhy98p4as6fc9282g873lmlv8v-kustomize-5.7.1"
-        }
-      }
-    },
     "nodejs@24.21.0": {
       "last_modified": "2026-10-08T19:21:32Z",
       "plugin_version": "0.0.5",

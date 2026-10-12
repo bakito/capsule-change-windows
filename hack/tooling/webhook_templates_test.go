@@ -295,7 +295,7 @@ func TestWebhookStandaloneE2ESelection(t *testing.T) {
 			}
 		})
 	}
-	script, err := os.ReadFile(filepath.Join(repository(t), "hack/e2e.sh"))
+	script, err := os.ReadFile(filepath.Join(repository(t), "Taskfile.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}

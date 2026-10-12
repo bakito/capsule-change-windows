@@ -34,7 +34,7 @@ import (
 // TestAPI exercises CRD validation, impersonated SSA, capture/restart/restore,
 // subresources, and UID protection against a real API server.
 func TestAPI(t *testing.T) {
-	environment := &envtest.Environment{CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases")}, ErrorIfCRDPathMissing: true}
+	environment := &envtest.Environment{CRDDirectoryPaths: []string{filepath.Join("..", "..", "charts", "change-windows", "crds")}, ErrorIfCRDPathMissing: true}
 	cfg, err := environment.Start()
 	if err != nil {
 		t.Fatal(err)

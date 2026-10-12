@@ -11,8 +11,8 @@ and return advance or active-window warnings. Each denial and warning supports
 User/Group/ServiceAccount audiences and CEL match conditions. Admission can also
 protect Node pools selected by Node labels.
 
-See the [complete ChangeWindow example](config/samples/addons_v1alpha1_changewindow.yaml)
-and [executor RBAC example](config/samples/executor-rbac.yaml).
+See the [complete ChangeWindow example](examples/addons_v1alpha1_changewindow.yaml)
+and [executor RBAC example](examples/executor-rbac.yaml).
 
 ## Documentation
 

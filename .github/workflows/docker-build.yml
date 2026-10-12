@@ -7,7 +7,6 @@ on:
       - 'api/**'
       - 'cmd/**'
       - 'internal/**'
-      - 'hack/image.sh'
       - '.ko.yaml'
       - 'go.*'
       - 'Taskfile.yml'

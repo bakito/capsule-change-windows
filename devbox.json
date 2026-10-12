@@ -4,7 +4,6 @@
     "go": "1.27.1",
     "go-task": "3.53.1",
     "kubernetes-controller-tools": "0.21.0",
-    "kustomize": "5.7.1",
     "setup-envtest": "0.22.3",
     "golangci-lint": "2.13.2",
     "kind": "0.32.0",

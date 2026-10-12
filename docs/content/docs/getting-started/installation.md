@@ -52,7 +52,7 @@ the executor you created.
 ```shell
 kubectl create namespace maintenance-demo
 kubectl label namespace maintenance-demo maintenance=enabled
-kubectl apply -f config/samples/maintenance-only.yaml
+kubectl apply -f examples/maintenance-only.yaml
 kubectl get changewindows
 kubectl get changewindow weekly-maintenance -o yaml
 ```

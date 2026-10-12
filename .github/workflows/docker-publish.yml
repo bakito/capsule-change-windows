@@ -31,7 +31,14 @@ jobs:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Validate release version
         id: version
-        run: devbox run -- task ci:version
+        run: |
+          : "${GITHUB_REF_NAME:?GITHUB_REF_NAME is required}"
+          version=${GITHUB_REF_NAME#v}
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo 'Release tag must be vMAJOR.MINOR.PATCH with an optional prerelease' >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
       - name: Authenticate registry
         run: devbox run -- task registry:login
         env:
@@ -44,7 +51,17 @@ jobs:
           REPOSITORY: ${{ github.repository_owner }}/change-windows
       - name: Export immutable image reference
         id: image
-        run: devbox run -- task ci:image
+        run: |
+          : "${IMAGE_REFS:=dist/image-refs.txt}"
+          ref=$(cat "$IMAGE_REFS")
+          if [[ ! "$ref" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
+            echo 'Expected one immutable published image reference' >&2
+            exit 1
+          fi
+          image=${ref%@*}
+          # ko includes the build tag before the digest; provenance needs the repository.
+          if [[ "${image##*/}" == *:* ]]; then image=${image%:*}; fi
+          printf 'image=%s\ndigest=%s\n' "$image" "${ref##*@}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
       - name: Sign published image
         run: devbox run -- task image:sign
   provenance:

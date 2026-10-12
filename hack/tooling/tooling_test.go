@@ -12,9 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	appsv1 "k8s.io/api/apps/v1"
-	"sigs.k8s.io/yaml"
 )
 
 func repository(t *testing.T) string {
@@ -70,24 +67,19 @@ func fixture(t *testing.T) (string, []string) {
 		t.Fatal(err)
 	}
 	root := repository(t)
-	for _, name := range []string{"Taskfile.yml", "prek.toml", "hack/enterprise.sh", "hack/dev-tool.sh", "hack/check-tools.sh", "hack/image.sh", "hack/dev-setup.sh", "hack/sign-image.sh", "hack/ci-output.sh", "hack/helm-release.sh", "hack/verify-commits.sh"} {
+	for _, name := range []string{"Taskfile.yml", "prek.toml", "hack/prek-builtins.toml"} {
 		copyFile(t, root, dir, name)
-	}
-	if err := os.Chmod(filepath.Join(dir, "hack/enterprise.sh"), 0o755); err != nil {
-		t.Fatal(err)
 	}
 	successful(t, dir, nil, "git", "init", "-q")
 	successful(t, dir, nil, "git", "config", "user.name", "Tooling Test")
 	successful(t, dir, nil, "git", "config", "user.email", "tooling-test@example.invalid")
-	write(t, filepath.Join(dir, "config/crd/bases/example.yaml"), "kind: CustomResourceDefinition\n")
-	write(t, filepath.Join(dir, "config/rbac/role.yaml"), "kind: ClusterRole\n")
 	for _, name := range []string{"charts/change-windows/crds", "charts/change-windows/files", "assets with spaces"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	bin := filepath.Join(dir, "tools")
-	for _, name := range []string{"npm", "go", "controller-gen", "setup-envtest", "ko", "helm", "kubectl", "cosign", "goreleaser"} {
+	for _, name := range []string{"devbox", "npm", "go", "controller-gen", "setup-envtest", "ko", "helm", "kubectl", "cosign", "goreleaser"} {
 		filename := filepath.Join(bin, name)
 		write(t, filename, `#!/usr/bin/env bash
 set -euo pipefail
@@ -97,6 +89,18 @@ printf '\t%s' "$@" >> "$TOOL_LOG"
 printf '\tassets=%s\n' "${KUBEBUILDER_ASSETS:-}" >> "$TOOL_LOG"
 if [[ "$name" == ko ]]; then printf 'repository=%s\n' "${KO_DOCKER_REPO:-}" >> "$TOOL_LOG"; fi
 if [[ "${FAIL_TOOL:-}" == "$name" ]]; then exit 37; fi
+if [[ "$name" == devbox ]]; then
+  [[ "$1" == run && "$2" == -- ]] || exit 1
+  shift 2
+  exec "$@"
+fi
+if [[ "$name" == go && "${4:-}" == crd-ref-docs ]]; then
+  for arg in "$@"; do
+    case "$arg" in
+      --output-path=*) printf '# API Reference\n#### Example\nA generated type.\n' > "${arg#*=}" ;;
+    esac
+  done
+fi
 if [[ "$name" == go && "${1:-}" == build && "${2:-}" == -o ]]; then
   cat > "$3" <<'MANAGER'
 #!/usr/bin/env bash
@@ -127,6 +131,7 @@ fi
 			t.Fatal(err)
 		}
 	}
+	write(t, filepath.Join(dir, "tools.log"), "")
 	return dir, []string{
 		"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"TOOL_LOG=" + filepath.Join(dir, "tools.log"),
@@ -209,7 +214,7 @@ func TestEnterpriseTasks(t *testing.T) {
 		t.Run(channel, func(t *testing.T) {
 			dir, env := fixture(t)
 			out := successful(t, dir, env, "task", "enterprise:"+channel, "ENTERPRISE_VERSION=0.1.0-rc.1", "DRY_RUN=true")
-			for _, value := range []string{"helm package charts/change-windows", "hack/image.sh push", "helm push", "change-windows-0.1.0-rc.1.tgz"} {
+			for _, value := range []string{"task image:push", "task helm:push", "VERSION=0.1.0-rc.1", "manager.image.reference="} {
 				if !strings.Contains(out, value) {
 					t.Fatalf("dry run missing %q: %s", value, out)
 				}
@@ -226,37 +231,33 @@ func TestEnterpriseTasks(t *testing.T) {
 			}
 		})
 	}
-	dir, env := fixture(t)
-	out := successful(t, dir, env, "task", "enterprise:deploy", "ENTERPRISE_VERSION=0.1.0")
-	if !strings.Contains(out, "helm upgrade --install") {
-		t.Fatal("missing deployment instructions")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "tools.log")); !os.IsNotExist(err) {
-		t.Fatal("deployment instructions executed a tool")
-	}
 }
 
 func TestNativeHooks(t *testing.T) {
-	dir, _ := fixture(t)
+	dir, env := fixture(t)
 	write(t, filepath.Join(dir, "valid.yaml"), "name: test\n---\nname: second\n")
 	write(t, filepath.Join(dir, "invalid.yaml"), "name: [broken\n")
 	write(t, filepath.Join(dir, "duplicate.yaml"), "name: first\nname: second\n")
 	write(t, filepath.Join(dir, "charts/example/templates/template.yaml"), "{{ if .Values.enabled }}\n")
 	successful(t, dir, nil, "prek", "validate-config", "prek.toml")
-	successful(t, dir, nil, "prek", "run", "check-yaml", "--files", "valid.yaml", "charts/example/templates/template.yaml")
+	successful(t, dir, env, "prek", "run", "files", "--files", "valid.yaml", "charts/example/templates/template.yaml")
 	for _, file := range []string{"invalid.yaml", "duplicate.yaml"} {
-		if out, err := command(t, dir, nil, "prek", "run", "check-yaml", "--files", file); err == nil || !strings.Contains(out, "Failed") {
+		if out, err := command(t, dir, env, "prek", "run", "files", "--files", file); err == nil || !strings.Contains(out, "Failed") {
 			t.Fatalf("invalid YAML not rejected: %s, %v", out, err)
 		}
 	}
-	env := []string{"DEVBOX_SHELL_ENABLED=1"}
+	// A hook filename must survive both Devbox and Task argument forwarding.
+	messageFile := "COMMIT MSG $(touch unexpected)"
 	for _, message := range []string{"feat: add a maintenance action", "fix(api)!: reject invalid rules\n\nBREAKING CHANGE: validation is stricter"} {
-		write(t, filepath.Join(dir, "COMMIT_MSG"), message+"\n")
-		successful(t, dir, env, "prek", "run", "conventional-commit", "--hook-stage", "commit-msg", "--commit-msg-filename", "COMMIT_MSG")
+		write(t, filepath.Join(dir, messageFile), message+"\n")
+		successful(t, dir, env, "prek", "run", "conventional-commit", "--hook-stage", "commit-msg", "--commit-msg-filename", messageFile)
 	}
 	write(t, filepath.Join(dir, "COMMIT_MSG"), "not a conventional commit\n")
 	if out, err := command(t, dir, env, "prek", "run", "conventional-commit", "--hook-stage", "commit-msg", "--commit-msg-filename", "COMMIT_MSG"); err == nil || !strings.Contains(out, "Failed") {
 		t.Fatalf("invalid commit accepted: %s, %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "unexpected")); !os.IsNotExist(err) {
+		t.Fatal("hook filename was evaluated as shell code")
 	}
 }
 
@@ -270,30 +271,6 @@ func TestHookInstallationReplacesLegacyShims(t *testing.T) {
 		data, err := os.ReadFile(filepath.Join(dir, ".git/hooks", stage))
 		if err != nil || !strings.Contains(string(data), "prek") || strings.Contains(string(data), "OLD_PYTHON_HOOK") {
 			t.Fatalf("legacy %s hook was not replaced: %v", stage, err)
-		}
-	}
-}
-
-func TestHookEnvironmentLauncher(t *testing.T) {
-	dir := t.TempDir()
-	copyFile(t, repository(t), dir, "hack/dev-tool.sh")
-	bin := filepath.Join(dir, "tools")
-	for _, name := range []string{"devbox", "example-tool"} {
-		filename := filepath.Join(bin, name)
-		write(t, filename, "#!/usr/bin/env bash\nprintf '%s\\n' \"${0##*/}\" \"$@\"\n")
-		if err := os.Chmod(filename, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, inside := range []string{"", "1"} {
-		env := []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "DEVBOX_SHELL_ENABLED=" + inside}
-		out := successful(t, dir, env, "bash", "hack/dev-tool.sh", "example-tool", "path with spaces")
-		want := "devbox\nrun\n--\nexample-tool\npath with spaces\n"
-		if inside == "1" {
-			want = "example-tool\npath with spaces\n"
-		}
-		if out != want {
-			t.Fatalf("wrong launcher behavior: %q, want %q", out, want)
 		}
 	}
 }
@@ -333,42 +310,5 @@ func TestDevboxLocks(t *testing.T) {
 	module, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil || !strings.Contains(string(module), "\ngo "+config.Packages["go"]+"\n") {
 		t.Fatal("Devbox Go version differs from the module toolchain")
-	}
-}
-
-func TestInstallerRendering(t *testing.T) {
-	root := repository(t)
-	before, err := os.ReadFile(filepath.Join(root, "config/manager/kustomization.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := successful(t, root, []string{"IMG=example.com/controller:tooling-test", "KUSTOMIZE=kustomize"}, "bash", "hack/render-installer.sh")
-	if !strings.Contains(out, "image: example.com/controller:tooling-test") || !strings.Contains(out, "kind: ValidatingWebhookConfiguration") {
-		t.Fatal("installer lost its image override or webhook")
-	}
-	managers := 0
-	for document := range strings.SplitSeq(out, "\n---\n") {
-		var deployment appsv1.Deployment
-		if err := yaml.Unmarshal([]byte(document), &deployment); err != nil {
-			t.Fatal(err)
-		}
-		if deployment.Kind != "Deployment" {
-			continue
-		}
-		for _, container := range deployment.Spec.Template.Spec.Containers {
-			if container.Name == "manager" {
-				managers++
-				if len(container.Command) != 0 || len(container.Args) == 0 {
-					t.Fatal("manager must preserve runtime arguments and use the ko image's entrypoint")
-				}
-			}
-		}
-	}
-	if managers != 1 {
-		t.Fatalf("expected one manager, found %d", managers)
-	}
-	after, err := os.ReadFile(filepath.Join(root, "config/manager/kustomization.yaml"))
-	if err != nil || string(before) != string(after) {
-		t.Fatal("installer rendering changed its source manifests")
 	}
 }

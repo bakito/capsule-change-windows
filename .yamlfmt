@@ -20,5 +20,3 @@ exclude:
   - charts/change-windows/templates
   - charts/change-windows/crds
   - charts/change-windows/files
-  - config/crd/bases
-  - config/rbac/role.yaml

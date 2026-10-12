@@ -1,4 +1,0 @@
-resources:
-  - service.yaml
-  - certificates.yaml
-  - webhooks.yaml

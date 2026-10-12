@@ -135,7 +135,7 @@ func TestSiteBuild(t *testing.T) {
 					}
 				}
 			}
-			source, err := os.ReadFile(filepath.Join(root, "config/samples/quickstart.yaml"))
+			source, err := os.ReadFile(filepath.Join(root, "examples/quickstart.yaml"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -212,7 +212,7 @@ func TestSiteBuild(t *testing.T) {
 				t.Error("generated API types are not searchable")
 			}
 			for _, sample := range []string{"maintenance-only.yaml", "addons_v1alpha1_changewindow.yaml", "executor-rbac.yaml", "node-pool-maintenance.yaml", "conditional-maintenance.yaml", "quickstart.yaml", "freeze-except-pods.yaml", "after-hours.yaml", "after-hours-executor-rbac.yaml"} {
-				original, err := os.ReadFile(filepath.Join(root, "config/samples", sample))
+				original, err := os.ReadFile(filepath.Join(root, "examples", sample))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -226,7 +226,7 @@ func TestSiteBuild(t *testing.T) {
 }
 
 func TestChangeWindowExamples(t *testing.T) {
-	files, err := filepath.Glob("../../config/samples/*.yaml")
+	files, err := filepath.Glob("../../examples/*.yaml")
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no examples found: %v", err)
 	}

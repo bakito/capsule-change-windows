@@ -6,7 +6,6 @@ on:
       - '.github/workflows/helm-*.yml'
       - 'charts/**'
       - 'api/**'
-      - 'config/**'
       - 'Taskfile.yml'
       - 'devbox.*'
 permissions:

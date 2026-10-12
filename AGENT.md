@@ -56,8 +56,8 @@ Capsule core and does not require Tenant objects.
 - `internal/admission`: policy validation, matching, denials, warnings and cache wiring.
 - `internal/metrics`: Prometheus metrics registered with controller-runtime.
 - `cmd/main.go`: manager, dependencies, TLS, metrics and webhook registration.
-- `config`: generated CRDs/RBAC, internal Kubebuilder/Kustomize fixtures and examples.
-- `charts/change-windows`: Helm packaging, including enterprise releases.
+- `examples`: executable ChangeWindow and executor RBAC examples.
+- `charts/change-windows`: Helm chart, generated CRDs/RBAC, and enterprise releases.
 - `e2e`, `hack`: isolated Kind testing and build/release tooling.
 - `docs`: Hugo/Doks site, feature guides and generated API reference.
 - `headlamp`: read-only Change Windows UI, resource maintenance sections and browser tests.
@@ -77,8 +77,8 @@ this addon usable without a running Capsule installation or Tenant objects.
 
 Helm is the only supported installation method. Keep user-facing installation,
 operations, and executor RBAC guidance aligned with the Helm chart's release
-namespace and service accounts. Kustomize scaffolding and installer helpers are
-internal development/test fixtures, not a supported installation alternative.
+namespace and service accounts. Generate CRDs and RBAC directly into the chart;
+do not reintroduce a `config/` tree or a separate installation path.
 
 Build container images through the ko-backed Task targets. `image:build` creates a
 local archive without a daemon or registry push; `image:push` explicitly builds and
@@ -117,9 +117,15 @@ use prek's native builtins, yamlfmt, ShellCheck, actionlint and Cocogitto.
 Use `task test:tooling` for Task/hook/release-helper changes. Preserve serialized
 generation before consumers; Task dependencies run concurrently, while `cmds`
 task calls are ordered. Pass configurable values via quoted environment variables.
+Keep task implementations inline in `Taskfile.yml`; do not add shell wrappers
+under `hack/`. Keep concrete targets and avoid mode-dispatch helper tasks.
+GitHub-specific output formatting belongs in workflows. All prek hooks must call Task targets through Devbox. Native prek
+checks belong in `hack/prek-builtins.toml`, which must not call Task recursively.
+Keep inline commands covered by `task lint:shell` and behavior tests. Preserve
+signal handling, temporary-file cleanup, and explicit publishing boundaries.
 For documentation/API/sample changes, run `task docs:generate docs:check`.
 Keep `docs/content/docs/reference/api.md` generated from the Go types. Share executable
-examples through the Hugo mounts of `config/samples/`. The documentation generator
+examples through the Hugo mounts of `examples/`. The documentation generator
 is a pinned Go tool in `hack/tools/`; its dependencies stay out of the controller
 module. Doks and its Sass dependencies are pinned in docs/package-lock.json;
 documentation tasks install them with npm ci --ignore-scripts. Keep docs/go.mod
@@ -129,7 +135,7 @@ Keep the default description cascade in docs/hugo.toml and add page-specific
 descriptions where useful. This keeps SEO, Open Graph, and Twitter metadata from
 invoking Hugo's automatic Summary, which can panic during live content rebuilds.
 Check incremental preview updates as well as clean builds when changing this path.
-The homepage YAML explorer uses config/samples/quickstart.yaml and annotations in
+The homepage YAML explorer uses examples/quickstart.yaml and annotations in
 docs/data/window_example.yaml. Preserve exact copy/download content and native
 links without JavaScript. For interaction changes, install Playwright Chromium
 and run task docs:test:browser; CI runs it on desktop and mobile viewports.
@@ -154,7 +160,7 @@ logs before cleanup. Observe runs first, then diagnose and fix after they finish
 
 Use conventional commits and the Apache-2.0 Go header. Do not commit or publish
 unless requested. `enterprise:release` and `enterprise:prerelease` publish images
-and Helm charts; inspect a dry run first. Enterprise deployment helpers print
-commands. `dev:setup` and `dev:deploy` apply resources to the explicitly selected
-development context; `dev:deploy` builds current source with ko and installs through
-Helm. `task e2e` exercises that path in its own disposable cluster.
+and Helm charts; inspect a dry run first. Enterprise release dry runs print the
+publication and deployment commands. `dev:setup` and `dev:deploy` apply resources
+to the explicitly selected development context; `dev:deploy` builds current source
+with ko and installs through Helm. `task e2e` exercises that path in its own disposable cluster.

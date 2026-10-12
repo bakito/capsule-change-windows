@@ -21,7 +21,6 @@ import (
 func deploymentFixture(t *testing.T) (string, []string) {
 	t.Helper()
 	dir, env := fixture(t)
-	copyFile(t, repository(t), dir, "hack/dev-deploy.sh")
 	for _, name := range []string{"kubectl", "kind"} {
 		filename := filepath.Join(dir, "tools", name)
 		write(t, filename, `#!/usr/bin/env bash
@@ -217,7 +216,7 @@ func TestDevDeployChartContract(t *testing.T) {
 			t.Fatalf("malformed argument %q", arg)
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(root, "config/rbac/role.yaml"))
+	data, err := os.ReadFile(filepath.Join(root, "charts/change-windows/files/manager-role.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

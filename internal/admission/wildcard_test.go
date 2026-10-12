@@ -21,7 +21,7 @@ import (
 )
 
 func TestFreezeExceptPodsExample(t *testing.T) {
-	data, err := os.ReadFile("../../config/samples/freeze-except-pods.yaml")
+	data, err := os.ReadFile("../../examples/freeze-except-pods.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

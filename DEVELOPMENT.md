@@ -44,11 +44,11 @@ is also pinned. Review version changes and rerun `task check`.
 - `api/v1alpha1/`: cluster-scoped API types and generated DeepCopy methods.
 - `cmd/main.go`: Kubebuilder manager entry point and scheme registration.
 - `internal/`: controller, admission, scheduling, execution and metrics code.
-- `config/`: generated CRDs/RBAC, internal Kubebuilder/Kustomize fixtures, and samples.
-- `charts/`: Helm packaging, including generated CRD and RBAC copies.
+- `examples/`: executable ChangeWindow and executor RBAC examples.
+- `charts/`: Helm packaging, including generated CRDs and RBAC.
 - `e2e/`: tests against the built controller in an isolated Kind cluster.
-- `hack/`: rendering/release/e2e helpers and Go tests for the development tooling.
-- `Taskfile.yml`: developer and CI commands; `devbox.json`/`devbox.lock`: tools.
+- `hack/`: development tooling tests, native check configuration, and API-reference tooling.
+- `Taskfile.yml`: inline developer and CI tasks; `devbox.json`/`devbox.lock`: tools.
 - `prek.toml`: native file checks and local development/commit-message hooks.
 
 `PROJECT` retains Kubebuilder metadata and the standard `cmd/main.go` entry point.
@@ -57,8 +57,7 @@ as the maintained entry point when incorporating that scaffold.
 
 Helm is the only supported installation method; see the
 [installation guide](docs/content/docs/getting-started/installation.md).
-The Kustomize scaffolding and installer helpers are internal development/test
-fixtures and are not an alternative installation path for users.
+CRDs and RBAC are generated directly into the chart; examples live in `examples/`.
 
 ## Run the controller on your host
 
@@ -172,21 +171,26 @@ Git. Generation task calls are serialized and deduplicated within a Task run.
 CI checks. YAML validation uses prek's Rust-native parser; yamlfmt checks style.
 Generated CRDs/RBAC retain their generator's formatting, and Helm templates are
 validated through Helm instead of being parsed as ordinary YAML.
-Actionlint uses ShellCheck for embedded shell scripts; its optional Python checker
-is disabled.
+Actionlint uses ShellCheck for workflow commands; its optional Python checker is
+disabled. Task implementations live directly in `Taskfile.yml`, including image
+builds, releases, documentation, development deployment, and e2e cleanup.
+`task lint:shell` checks those inline commands with ShellCheck. Tasks that need
+Bash signal handling or timers use an inline Bash block.
 
 `task hooks:install` replaces pre-commit's existing `pre-commit` and `commit-msg`
 Git hook shims with prek, without chaining the old Python hooks.
-Hooks use native builtins, Go tools, and Rust-based Cocogitto for Conventional
-Commits. File hygiene checks report changes without modifying files; fix reported
-issues and stage them before retrying. Local hooks enter Devbox automatically
-when invoked outside its shell. No Python environments or pip dependencies are
-used. `task hooks:check` runs all pre-commit hooks on tracked files; new files must
+Every hook calls a Task target through `devbox run -- task`, including file
+hygiene, YAML formatting, and Conventional Commit validation. The same targets
+can be run directly in a Devbox shell. `task lint:files` invokes prek's native
+checks through `hack/prek-builtins.toml`; that configuration contains no Task
+hooks, avoiding recursion. File hygiene checks report changes without modifying
+files; fix reported issues and stage them before retrying. No Python environments
+or pip dependencies are used. `task hooks:check` runs all pre-commit hooks on tracked files; new files must
 be staged to participate. The generator hook runs before checks that consume its
 output.
 
 `task test:tooling` exercises Task variables, failure propagation, native syntax
-and commit checks, installer rendering, and enterprise dry runs without publishing
+and commit checks, Helm rendering, and enterprise dry runs without publishing
 or accessing a cluster. The legacy hyphenated command names remain Task aliases
 where useful, for example `task test-unit` and `task enterprise-release`.
 
@@ -211,8 +215,8 @@ preserves existing clusters and the developer's current context. Set `IMG`,
 `KIND_CLUSTER`, `KIND_NODE_IMAGE`, and `ARTIFACTS` using Task variables or environment
 variables. Select a unique cluster name; the harness rejects an existing name.
 
-`task manifests` refreshes both Kustomize and Helm CRDs and manager RBAC. Do not
-hand-edit chart copies. The chart's optional ServiceMonitor requires a Prometheus
+`task manifests` writes CRDs and manager RBAC directly into the Helm chart. Do not
+hand-edit generated manifests. The chart's optional ServiceMonitor requires a Prometheus
 token Secret with `/metrics` RBAC.
 
 Run performance checks inside Devbox with:
@@ -249,9 +253,9 @@ then run the documentation checks and inspect the rendered site.
 Edit weighted Markdown pages under `docs/content/docs/`. Group indexes define
 the sidebar. Use Hugo `relref` links between pages so navigation also works on
 project sites. The shared `example` shortcode and download mounts read directly
-from `config/samples/`; do not duplicate executable examples.
+from `examples/`; do not duplicate executable examples.
 
-The homepage explorer renders `config/samples/quickstart.yaml` without changing
+The homepage explorer renders `examples/quickstart.yaml` without changing
 its content. Annotations in `docs/data/window_example.yaml` connect each top-level
 spec block to its explanation, guide, and API type. Keep those links accurate as
 the API evolves. The static checks verify that copyable YAML and the download
@@ -328,7 +332,7 @@ Set `PLATFORMS` to override the published platforms. This is an explicit publish
 operation, not a push of the local archive. Both tasks use `.ko.yaml` and write the
 result to `IMAGE_REFS` (default `dist/image-refs.txt`). `IMG` accepts a tagged
 reference, including a registry port. `image:sign` signs the recorded digest;
-`ci:image` exports its repository and digest for provenance.
+the release workflows export its repository and digest for provenance.
 
 GitHub workflows call the same Task targets through the shared Devbox setup action.
 Linting, unit/API tests, e2e, documentation, and Headlamp each have their own jobs.
@@ -347,9 +351,7 @@ Enterprise tasks package and publish the matching controller image and Helm char
 ```sh
 task enterprise:prerelease ENTERPRISE_VERSION=0.1.0-rc.1 DRY_RUN=true
 task enterprise:release ENTERPRISE_VERSION=0.1.0 DRY_RUN=true
-task enterprise:deploy ENTERPRISE_VERSION=0.1.0
 ```
 
-Inspect dry runs before publication. `enterprise:deploy` and
-`enterprise:deploy-prerelease` only print deployment instructions. No release
-publication is enabled in pull-request CI.
+Inspect dry runs before publication. Release tasks print deployment instructions
+after packaging. Pull-request CI never publishes releases.

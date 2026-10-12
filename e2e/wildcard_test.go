@@ -48,7 +48,7 @@ func TestFreezeExceptPodsExample(t *testing.T) {
 	createMatching(t, admin, dep)
 	config := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "existing", Namespace: "freeze-all"}, Data: map[string]string{"value": "original"}}
 	createMatching(t, admin, config)
-	data, err := os.ReadFile("../config/samples/freeze-except-pods.yaml")
+	data, err := os.ReadFile("../examples/freeze-except-pods.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,10 +20,13 @@ Xcode Command Line Tools for Go's race detector. ko builds container images with
 a daemon. Docker or another compatible engine is a separate prerequisite for Kind
 tests.
 
-Task is the command entry point. Hooks use prek, native file checks, yamlfmt,
-ShellCheck, actionlint, and Cocogitto; no Python environment is required.
-`task hooks:install` replaces legacy pre-commit shims. Hooks enter Devbox when
-needed, and `devbox run -- task COMMAND` runs a task without an interactive shell.
+Task implementations live directly in `Taskfile.yml`. Every prek hook calls a
+Task target through `devbox run -- task`, including file checks, YAML formatting,
+and commit-message validation. `task lint:shell` checks inline Task commands with
+ShellCheck. The native checks use a separate builtin-only prek configuration to
+avoid calling the Task hooks recursively. No Python environment is required.
+`task hooks:install` replaces legacy pre-commit shims. Use
+`devbox run -- task COMMAND` to run any target without an interactive shell.
 
 ## Run the controller on your host
 
@@ -138,7 +141,8 @@ helm --kube-context my-dev uninstall change-windows --namespace change-windows-s
 | `internal/admission/` | Policy validation, matching, denial, warnings, and cache wiring. |
 | `internal/metrics/` | Bounded-label Prometheus metrics. |
 | `cmd/main.go` | Manager, discovery, dependencies, TLS, and registration. |
-| `config/`, `charts/` | Internal Kubebuilder/Kustomize fixtures, the Helm chart, generated CRDs/RBAC, and executable examples. |
+| `charts/` | Helm chart and generated CRDs/RBAC. |
+| `examples/` | Executable ChangeWindow and executor RBAC examples. |
 | `e2e/`, `hack/` | Isolated Kind tests and development/release helpers. |
 | `docs/` | Hugo site, pinned Doks npm dependencies, guides, and generated API reference. |
 | `headlamp/` | Headlamp plugin, schedule previews, selection helpers, and UI/browser tests. |
@@ -149,7 +153,7 @@ policies and evaluates time independently of reconciled status. Changes to eithe
 path must preserve namespace scope, protected namespaces, and object identity.
 
 Helm is the only supported [installation method]({{< relref "/docs/getting-started/installation" >}}).
-Kustomize scaffolding and installer helpers are internal development/test fixtures.
+CRDs and RBAC are generated directly into the chart.
 Keep user-facing deployment instructions aligned with the Helm chart.
 
 ## Change and generate the API
@@ -161,7 +165,7 @@ task verify-generated docs:check
 
 Edit Go API types and validation markers first. Generate DeepCopy methods, CRDs,
 RBAC, and the API reference; never hand-edit those outputs. `task manifests`
-refreshes the chart's generated copies. `task verify-generated` expects intended
+writes directly into the chart's CRD and RBAC directories. `task verify-generated` expects intended
 files to be tracked by Git and detects modified or untracked generated artifacts.
 
 Task dependencies run concurrently. Keep generation before consumers using
@@ -182,7 +186,7 @@ task e2e IMG=ghcr.io/projectcapsule/change-windows:e2e \
 `test:unit` excludes the real API-server suite. `test` runs unit and envtest
 integration tests with the race detector; setup-envtest obtains the pinned API
 server assets. Set `KUBEBUILDER_ASSETS` to an existing directory to reuse them.
-`test:tooling` verifies Task, hook, installer, and release-command behavior without
+`test:tooling` verifies Task, hook, Helm, and release-command behavior without
 publishing or touching a cluster. `docs:check` checks generated-reference drift,
 example validity, and rendered links and assets.
 
@@ -232,9 +236,9 @@ then run the documentation checks and inspect the rendered site.
 Edit weighted Markdown pages under `docs/content/docs/`. Group indexes define
 the sidebar. Use Hugo `relref` links between pages so navigation also works on
 project sites. The shared `example` shortcode and download mounts read directly
-from `config/samples/`; do not duplicate executable examples.
+from `examples/`; do not duplicate executable examples.
 
-The homepage explorer renders `config/samples/quickstart.yaml` without changing
+The homepage explorer renders `examples/quickstart.yaml` without changing
 its content. Annotations in `docs/data/window_example.yaml` connect each top-level
 spec block to its explanation, guide, and API type. Keep those links accurate as
 the API evolves. The static checks verify that copyable YAML and the download
@@ -325,10 +329,9 @@ run the checks relevant to the change before opening a pull request.
 ```shell
 task enterprise:prerelease ENTERPRISE_VERSION=0.1.0-rc.1 DRY_RUN=true
 task enterprise:release ENTERPRISE_VERSION=0.1.0 DRY_RUN=true
-task enterprise:deploy ENTERPRISE_VERSION=0.1.0
 ```
 
 Enterprise release tasks publish images and Helm charts when `DRY_RUN` is omitted.
 Review the preview and authenticate to the intended registry before intentional
-publication. Versions use SemVer without a `v` prefix or build metadata. Deployment
-helpers only print commands. Pull-request checks do not publish releases.
+publication. Versions use SemVer without a `v` prefix or build metadata. Release
+tasks also print deployment instructions. Pull-request checks do not publish releases.

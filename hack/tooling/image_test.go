@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"sigs.k8s.io/yaml"
 )
 
 func TestKoImageTasks(t *testing.T) {
@@ -116,7 +118,7 @@ func TestHelmReleaseTasks(t *testing.T) {
 	}
 	for _, failure := range []string{"FAIL_TOOL=helm", "HELM_DIGEST=invalid"} {
 		write(t, refs, "old digest")
-		if _, err := command(t, dir, append(env, "VERSION=1.2.3", failure), "bash", "hack/helm-release.sh", "push"); err == nil {
+		if _, err := command(t, dir, append(env, failure), "task", "helm:push", "VERSION=1.2.3"); err == nil {
 			t.Fatalf("publishing accepted %s", failure)
 		}
 		if _, err := os.Stat(refs); !os.IsNotExist(err) {
@@ -131,7 +133,7 @@ func TestReleaseDigestOutputsAndSigning(t *testing.T) {
 	ref := "ghcr.io/example/controller:1.2.3@" + digest
 	write(t, filepath.Join(dir, "dist/image-refs.txt"), ref+"\n")
 	output := filepath.Join(dir, "github-output")
-	successful(t, dir, append(env, "GITHUB_OUTPUT="+output), "task", "ci:image")
+	successful(t, dir, append(env, "GITHUB_OUTPUT="+output), "bash", "-euo", "pipefail", "-c", workflowStep(t, "docker-publish.yml", "publish-images", "image"))
 	data, err := os.ReadFile(output)
 	if err != nil || string(data) != "image=ghcr.io/example/controller\ndigest="+digest+"\n" {
 		t.Fatalf("wrong provenance output: %s %v", data, err)
@@ -142,9 +144,12 @@ func TestReleaseDigestOutputsAndSigning(t *testing.T) {
 	}
 	for _, invalid := range []string{"image:latest", ref + "\nmalicious=value", "repo@sha256:short"} {
 		write(t, filepath.Join(dir, "dist/image-refs.txt"), invalid)
-		for _, task := range []string{"ci:image", "image:sign"} {
-			if _, err := command(t, dir, append(env, "GITHUB_OUTPUT="+output), "task", task); err == nil {
-				t.Fatalf("%s accepted invalid digest %q", task, invalid)
+		for _, args := range [][]string{
+			{"task", "image:sign"},
+			{"bash", "-euo", "pipefail", "-c", workflowStep(t, "docker-publish.yml", "publish-images", "image")},
+		} {
+			if _, err := command(t, dir, append(env, "GITHUB_OUTPUT="+output), args[0], args[1:]...); err == nil {
+				t.Fatalf("%s accepted invalid digest %q", args[0], invalid)
 			}
 		}
 	}
@@ -153,16 +158,38 @@ func TestReleaseDigestOutputsAndSigning(t *testing.T) {
 func TestReleaseVersionAndSnapshot(t *testing.T) {
 	dir, env := fixture(t)
 	output := filepath.Join(dir, "github-output")
-	successful(t, dir, append(env, "GITHUB_REF_NAME=v1.2.3-rc.1", "GITHUB_OUTPUT="+output), "task", "ci:version")
+	successful(t, dir, append(env, "GITHUB_REF_NAME=v1.2.3-rc.1", "GITHUB_OUTPUT="+output), "bash", "-euo", "pipefail", "-c", workflowStep(t, "docker-publish.yml", "publish-images", "version"))
 	data, err := os.ReadFile(output)
 	if err != nil || string(data) != "version=1.2.3-rc.1\n" {
 		t.Fatalf("wrong release version: %s %v", data, err)
 	}
-	if _, err := command(t, dir, append(env, "GITHUB_REF_NAME=v1.2.3+build", "GITHUB_OUTPUT="+output), "task", "ci:version"); err == nil {
+	if _, err := command(t, dir, append(env, "GITHUB_REF_NAME=v1.2.3+build", "GITHUB_OUTPUT="+output), "bash", "-euo", "pipefail", "-c", workflowStep(t, "docker-publish.yml", "publish-images", "version")); err == nil {
 		t.Fatal("unsupported image tag accepted")
 	}
 	successful(t, dir, env, "task", "release:snapshot")
 	if !strings.Contains(logContents(t, dir), "goreleaser\trelease\t--snapshot\t--clean\t--skip=publish,sign") {
 		t.Fatal("snapshot could publish or sign artifacts")
 	}
+}
+
+// Exercise GitHub metadata at its workflow consumer; build and publish remain Task targets.
+func workflowStep(t *testing.T, file, job, id string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repository(t), ".github/workflows", file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct{ Steps []struct{ ID, Run string } }
+	}
+	if err := yaml.Unmarshal(data, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range workflow.Jobs[job].Steps {
+		if step.ID == id {
+			return step.Run
+		}
+	}
+	t.Fatalf("missing step %s/%s in %s", job, id, file)
+	return ""
 }

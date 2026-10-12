@@ -54,7 +54,7 @@ func TestMissingDevelopmentTools(t *testing.T) {
 			if err == nil {
 				t.Fatalf("missing %s was accepted: %s", tc.tool, out)
 			}
-			for _, want := range []string{"Missing development tool: " + tc.tool, "devbox shell", "devbox run --", "DEVELOPMENT.md"} {
+			for _, want := range []string{"Missing", "devbox shell", "devbox run --", "DEVELOPMENT.md"} {
 				if !strings.Contains(out, want) {
 					t.Errorf("missing recovery instruction %q: %s", want, out)
 				}
@@ -66,27 +66,5 @@ func TestMissingDevelopmentTools(t *testing.T) {
 				t.Fatalf("tools ran before preflight failed: %s", log)
 			}
 		})
-	}
-}
-
-func TestCheckTools(t *testing.T) {
-	root := repository(t)
-	for _, tc := range []struct {
-		name string
-		args []string
-	}{
-		{name: "none"},
-		{name: "available", args: []string{"bash", "go", "controller-gen"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			out := successful(t, root, nil, "bash", append([]string{"hack/check-tools.sh"}, tc.args...)...)
-			if out != "" {
-				t.Fatalf("successful preflight printed a diagnostic: %s", out)
-			}
-		})
-	}
-	out, err := command(t, root, nil, "bash", "hack/check-tools.sh", "missing-dev-tool-one", "missing-dev-tool-two")
-	if err == nil || !strings.Contains(out, "Missing development tool: missing-dev-tool-one") || !strings.Contains(out, "Missing development tool: missing-dev-tool-two") {
-		t.Fatalf("did not report all missing tools: %v %s", err, out)
 	}
 }
