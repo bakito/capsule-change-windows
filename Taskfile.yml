@@ -730,7 +730,7 @@ tasks:
         cosign sign --yes "$ref"
 
   registry:login:
-    desc: Authenticate ko with REGISTRY_USERNAME and REGISTRY_PASSWORD.
+    desc: Authenticate ko and Cosign with REGISTRY_USERNAME and REGISTRY_PASSWORD.
     env:
       REGISTRY: '{{.REGISTRY}}'
     cmds:

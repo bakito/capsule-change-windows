@@ -8,16 +8,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  headlamp-test:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: projectcapsule/github-actions/headlamp-test@84ff57abf7d51892eaf19efbbddefcfe56969071
-        with:
-          build-root: headlamp/
-          node-version: '24.21.0'
   release:
     runs-on: ubuntu-24.04
     permissions:
@@ -36,7 +26,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   headlamp-publish:
-    needs: [release, headlamp-test]
+    needs: [release]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -293,6 +293,12 @@ In the repository settings, select **Pages → Build and deployment → Source �
 GitHub Actions** once. The workflow uses the built-in token and the `github-pages`
 environment; no publishing secret is required.
 
+If **Configure Pages** fails with **Get Pages site failed / Not Found**, a
+repository administrator must enable the source above, then rerun the Documentation
+workflow on `main`. The built-in `GITHUB_TOKEN` cannot create the initial Pages site;
+setting `enablement: true` alone does not fix this. See the
+[Configure Pages enablement requirements](https://github.com/actions/configure-pages/blob/main/action.yml).
+
 ### Hugo version selection
 
 If `hugo version` reports an older Homebrew/system binary, use
@@ -341,7 +347,16 @@ implemented. External security scanners, artifact uploads, signing setup, chart
 index publication, and SLSA generation remain GitHub Actions integrations.
 
 `task release:snapshot` checks GoReleaser and builds archives/SBOMs without
-publication or signing. `task release` publishes a tagged GitHub release.
+publication or signing. `task release` publishes a tagged GitHub release with
+Cosign `.sigstore.json` bundles for its signed artifacts. OCI chart publication
+runs both `helm:login` and `registry:login`: Helm uses its own credential store,
+while ko and Cosign share the registry credentials. Both use `REGISTRY_USERNAME`
+and `REGISTRY_PASSWORD`, supplied by the release workflow.
+
+Headlamp tests run on pull requests and pushes to `main`. Release tags run only
+`headlamp-publish` after the controller release succeeds, publishing plugin
+metadata to the `headlamp-plugin` branch.
+
 `helm:package` and `helm:push` use the `change-windows` chart and `VERSION`;
 `helm:docs` generates its README. Helm schema generation is not configured in this
 repository. Release tasks require the signing/SBOM tools installed by their CI jobs.

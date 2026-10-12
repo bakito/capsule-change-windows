@@ -276,6 +276,12 @@ In the repository settings, select **Pages → Build and deployment → Source �
 GitHub Actions** once. The workflow uses the built-in token and the `github-pages`
 environment; no publishing secret is required.
 
+If **Configure Pages** fails with **Get Pages site failed / Not Found**, a
+repository administrator must enable the source above, then rerun the Documentation
+workflow on `main`. The built-in `GITHUB_TOKEN` cannot create the initial Pages site;
+setting `enablement: true` alone does not fix this. See the
+[Configure Pages enablement requirements](https://github.com/actions/configure-pages/blob/main/action.yml).
+
 ### An older system Hugo
 
 If `hugo version` reports an older Homebrew/system binary, use

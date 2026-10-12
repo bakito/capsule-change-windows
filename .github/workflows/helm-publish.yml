@@ -65,7 +65,8 @@ jobs:
           fi
           printf 'version=%s\n' "$version" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
       - name: Authenticate registry
-        run: devbox run -- task helm:login
+        # Helm and Cosign read separate credential stores; authenticate both.
+        run: devbox run -- task helm:login registry:login
         env:
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

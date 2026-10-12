@@ -74,8 +74,8 @@ func TestHeadlampWorkflowPublicationBoundary(t *testing.T) {
 		t.Fatal("release trigger or default token scope is incorrect")
 	}
 	publish := release.Jobs["headlamp-publish"]
-	if !slices.Equal(publish.Needs, []string{"release", "headlamp-test"}) || publish.Permissions["contents"] != "write" {
-		t.Fatal("plugin publication must wait for passing checks and the controller release")
+	if !slices.Equal(publish.Needs, []string{"release"}) || publish.Permissions["contents"] != "write" {
+		t.Fatal("plugin publication must wait for the controller release without rerunning PR checks")
 	}
 	if publish.Concurrency.Group != "headlamp-plugin-publication" || publish.Concurrency.Cancel {
 		t.Fatal("metadata branch writers must serialize across tags without cancellation")
@@ -114,7 +114,7 @@ func TestHeadlampWorkflowPublicationBoundary(t *testing.T) {
 				}
 			}
 		}
-		if checks != 1 || (name == "pr" && publications != 0) || (name == "release" && publications != 1) {
+		if (name == "pr" && (checks != 1 || publications != 0)) || (name == "release" && (checks != 0 || publications != 1)) {
 			t.Fatalf("%s: checks=%d publications=%d", name, checks, publications)
 		}
 	}
