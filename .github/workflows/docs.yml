@@ -24,7 +24,7 @@ jobs:
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Check and build documentation
         env:
-          DOCS_BASE_URL: ${{ steps.pages.outputs.base_url || 'https://projectcapsule.github.io/schedule-action-controller/' }}
+          DOCS_BASE_URL: ${{ steps.pages.outputs.base_url || 'https://change-windows.addons.projectcapsule.dev/' }}
         run: devbox run -- task docs:check docs:build
       - name: Test desktop and mobile interactions
         run: devbox run -- task docs:browser:install docs:test:browser

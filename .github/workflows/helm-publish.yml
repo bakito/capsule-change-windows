@@ -71,34 +71,33 @@ jobs:
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
       - name: Package and publish chart
-        run: devbox run -- task helm:push
+        id: chart
         env:
           VERSION: ${{ steps.version.outputs.version }}
           CHART_REGISTRY: oci://ghcr.io/${{ github.repository_owner }}/charts
-      - name: Export chart digest
-        id: chart
         run: |
-          IMAGE_REFS=dist/chart-refs.txt
-          : "${IMAGE_REFS:=dist/image-refs.txt}"
-          ref=$(cat "$IMAGE_REFS")
+          ref=$(devbox run -- task helm:push)
           if [[ ! "$ref" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
             echo 'Expected one immutable published image reference' >&2
             exit 1
           fi
           image=${ref%@*}
-          # ko includes the build tag before the digest; provenance needs the repository.
-          if [[ "${image##*/}" == *:* ]]; then image=${image%:*}; fi
           printf 'image=%s\ndigest=%s\n' "$image" "${ref##*@}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
       - name: Sign chart
-        run: devbox run -- task image:sign IMAGE_REFS=dist/chart-refs.txt
+        run: devbox run -- task image:sign
+        env:
+          IMAGE_REF: ${{ steps.chart.outputs.image }}@${{ steps.chart.outputs.digest }}
   helm-provenance:
     needs: publish-helm-oci
     permissions:
       id-token: write
       packages: write
       actions: read
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    # SLSA requires a full release tag; check-actions.yml allows this exception.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
+      # Private repositories must explicitly opt in to publishing metadata to Rekor.
+      private-repository: ${{ vars.SLSA_PUBLIC_PROVENANCE == 'true' }}
       image: ${{ needs.publish-helm-oci.outputs.image }}
       digest: ${{ needs.publish-helm-oci.outputs.digest }}
       registry-username: ${{ github.actor }}

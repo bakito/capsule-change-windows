@@ -282,6 +282,34 @@ workflow on `main`. The built-in `GITHUB_TOKEN` cannot create the initial Pages 
 setting `enablement: true` alone does not fix this. See the
 [Configure Pages enablement requirements](https://github.com/actions/configure-pages/blob/main/action.yml).
 
+### Custom domain on Netlify DNS
+
+The production URL is `https://change-windows.addons.projectcapsule.dev/`.
+GitHub Pages hosts the site; Netlify manages its DNS.
+
+1. In this repository's **Settings → Pages**, select **GitHub Actions** as the
+   source and save `change-windows.addons.projectcapsule.dev` as the **Custom domain**.
+2. In Netlify **DNS → projectcapsule.dev → Add new record**, create:
+
+   | Type | Name within the zone | Value |
+   | --- | --- | --- |
+   | CNAME | `change-windows.addons` | `projectcapsule.github.io` |
+
+   The resulting hostname must be `change-windows.addons.projectcapsule.dev`.
+   If `addons.projectcapsule.dev` is a separately delegated zone, use
+   `change-windows` as the record name instead. Use the default TTL. Remove any
+   conflicting record for this exact hostname; leave other subdomains unchanged.
+3. After GitHub's DNS check and certificate provisioning succeed, enable
+   **Enforce HTTPS**, then run the Documentation workflow on `main`.
+
+The CNAME value is a hostname, without `https://` or a repository path.
+A `CNAME` file in the generated site is unnecessary for an Actions-based Pages
+workflow. Hugo and Task default to the production URL, and CI uses the URL returned
+by Configure Pages. Netlify does not need a build or hosting configuration.
+
+See [GitHub's custom domain setup](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
+and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-domains/dns-records/).
+
 ### An older system Hugo
 
 If `hugo version` reports an older Homebrew/system binary, use
@@ -323,6 +351,12 @@ Linux architecture without pushing to a registry. Set `IMAGE_PLATFORM` or
 directly. `image:push` builds and publishes Linux amd64/arm64 images and SBOMs;
 override `PLATFORMS` if needed. `image:ko` is an alias of `image:build`.
 
+`image:push` and `helm:push` print one immutable `repository@sha256:digest` reference
+to stdout and send build/publish diagnostics to stderr. GitHub workflows pass that
+reference through step and job outputs. To sign it locally, capture the output and
+pass it to `task image:sign IMAGE_REF="$IMAGE_REF"`; there are no reference files in
+`dist/`. Multi-platform image output identifies the index, not a platform manifest.
+
 GitHub workflows invoke the same Task targets with the locked Devbox toolchain.
 `release:snapshot` checks and builds GoReleaser archives without publication or
 signing; `release` publishes a tagged release. Helm tasks use `charts/change-windows`.
@@ -341,3 +375,32 @@ Enterprise release tasks publish images and Helm charts when `DRY_RUN` is omitte
 Review the preview and authenticate to the intended registry before intentional
 publication. Versions use SemVer without a `v` prefix or build metadata. Release
 tasks also print deployment instructions. Pull-request checks do not publish releases.
+
+### Provenance and Scorecard setup
+
+SLSA container provenance requires the full generator version tag (`vX.Y.Z`).
+The repository's action pinning check explicitly allows this upstream requirement;
+a commit SHA reference causes the generator to fail. The final exit code 27 is an
+aggregate failure status, not the underlying error.
+
+For a private repository, set the Actions repository variable
+`SLSA_PUBLIC_PROVENANCE=true` only if publishing its provenance metadata, including
+repository identity, to the public Rekor transparency log is intended. Without this
+opt-in, the generator rejects private repositories. Public repositories need no
+variable. See [SLSA's reference and private repository requirements](https://github.com/slsa-framework/slsa-github-generator/blob/v2.1.0/internal/builders/container/README.md#referencing-the-slsa-generator).
+
+Scorecard uses `GITHUB_TOKEN` by default, with job-level read access to contents,
+issues, pull requests and checks. These reads are needed for private-repository
+GraphQL queries; `Resource not accessible by integration` indicates insufficient
+access. No extra secret is required for the standard checks.
+
+If `SCORECARD_READ_TOKEN` is configured, it takes precedence and must have access to
+this repository and those same read permissions. A fine-grained PAT additionally
+needs **Administration: read** to inspect classic branch protection and optionally
+**Webhooks: read** for the webhook check. Job permissions do not expand a PAT's
+permissions. Repository rulesets can be inspected with the standard workflow token.
+
+Private-repository SARIF uploads require GitHub Code Security/Advanced Security
+with code scanning enabled. Private results are retained as a workflow artifact
+and sent to repository code scanning, without publishing them to Scorecard's
+public service. See [Scorecard setup and private repository permissions](https://github.com/ossf/scorecard-action/blob/v2.4.4/README.md#additional-permissions-for-private-repositories).

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -145,4 +146,76 @@ printf '{"testBundle":true}\n' > "$bundle"
 	if bundles != 2 {
 		t.Fatalf("expected archive and checksum signing bundles, got %d: %s", bundles, data)
 	}
+}
+
+func TestProvenanceGeneratorConfiguration(t *testing.T) {
+	for _, tc := range []struct{ file, job string }{
+		{"docker-publish.yml", "provenance"},
+		{"helm-publish.yml", "helm-provenance"},
+	} {
+		data, err := os.ReadFile(filepath.Join(repository(t), ".github/workflows", tc.file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var workflow struct {
+			Jobs map[string]struct {
+				Uses string
+				With map[string]string
+			}
+		}
+		if err := yaml.Unmarshal(data, &workflow); err != nil {
+			t.Fatal(err)
+		}
+		job := workflow.Jobs[tc.job]
+		ref := strings.TrimPrefix(job.Uses, "slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@")
+		// The generator downloads its builder by release tag and binds that tag
+		// into the signing identity; SHA references cannot be substituted here.
+		if !regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(ref) {
+			t.Errorf("%s: SLSA needs a full release tag, got %q", tc.file, job.Uses)
+		}
+		if job.With["private-repository"] != "${{ vars.SLSA_PUBLIC_PROVENANCE == 'true' }}" {
+			t.Errorf("%s: private repository metadata publication must require an explicit opt-in", tc.file)
+		}
+		if job.With["continue-on-error"] == "true" {
+			t.Errorf("%s: failed provenance must fail the release", tc.file)
+		}
+	}
+}
+
+func TestScorecardPrivateRepositoryAccess(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repository(t), ".github/workflows/scorecard.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Permissions map[string]string
+			Steps       []struct {
+				Uses string
+				With map[string]string
+			}
+		}
+	}
+	if err := yaml.Unmarshal(data, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	job := workflow.Jobs["analysis"]
+	for _, permission := range []string{"contents", "issues", "pull-requests", "checks"} {
+		if job.Permissions[permission] != "read" {
+			t.Errorf("private repository analysis needs %s: read", permission)
+		}
+	}
+	for _, step := range job.Steps {
+		if !strings.HasPrefix(step.Uses, "ossf/scorecard-action@") {
+			continue
+		}
+		if step.With["repo_token"] != "${{ secrets.SCORECARD_READ_TOKEN || github.token }}" {
+			t.Error("Scorecard must work without a separately provisioned PAT")
+		}
+		if step.With["publish_results"] != "${{ !github.event.repository.private }}" {
+			t.Error("private Scorecard results must not be published to the public service")
+		}
+		return
+	}
+	t.Fatal("missing Scorecard analysis")
 }

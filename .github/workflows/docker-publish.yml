@@ -45,33 +45,33 @@ jobs:
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish controller and SBOMs
-        run: devbox run -- task image:push
+        id: image
         env:
           VERSION: ${{ steps.version.outputs.version }}
           REPOSITORY: ${{ github.repository_owner }}/change-windows
-      - name: Export immutable image reference
-        id: image
         run: |
-          : "${IMAGE_REFS:=dist/image-refs.txt}"
-          ref=$(cat "$IMAGE_REFS")
+          ref=$(devbox run -- task image:push)
           if [[ ! "$ref" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
             echo 'Expected one immutable published image reference' >&2
             exit 1
           fi
           image=${ref%@*}
-          # ko includes the build tag before the digest; provenance needs the repository.
-          if [[ "${image##*/}" == *:* ]]; then image=${image%:*}; fi
           printf 'image=%s\ndigest=%s\n' "$image" "${ref##*@}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
       - name: Sign published image
         run: devbox run -- task image:sign
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image }}@${{ steps.image.outputs.digest }}
   provenance:
     needs: publish-images
     permissions:
       id-token: write
       packages: write
       actions: read
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    # SLSA requires a full release tag; check-actions.yml allows this exception.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
+      # Private repositories must explicitly opt in to publishing metadata to Rekor.
+      private-repository: ${{ vars.SLSA_PUBLIC_PROVENANCE == 'true' }}
       image: ${{ needs.publish-images.outputs.image }}
       digest: ${{ needs.publish-images.outputs.digest }}
       registry-username: ${{ github.actor }}

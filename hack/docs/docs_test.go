@@ -32,7 +32,7 @@ func TestSiteBuild(t *testing.T) {
 		t.Run(prefix, func(t *testing.T) {
 			destination := t.TempDir()
 			cmd := exec.Command("hugo", "--source", "docs", "--destination", destination,
-				"--baseURL", "https://docs.example.com"+prefix, "--minify", "--panicOnWarning")
+				"--baseURL", "https://change-windows.addons.projectcapsule.dev"+prefix, "--minify", "--panicOnWarning")
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "PATH="+filepath.Join(root, "docs/node_modules/.bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 			if output, err := cmd.CombinedOutput(); err != nil {
@@ -144,7 +144,7 @@ func TestSiteBuild(t *testing.T) {
 			}
 			checkLink := func(source, link string) {
 				t.Helper()
-				base, _ := url.Parse("https://docs.example.com" + prefix + strings.TrimSuffix(source, "index.html"))
+				base, _ := url.Parse("https://change-windows.addons.projectcapsule.dev" + prefix + strings.TrimSuffix(source, "index.html"))
 				u, err := url.Parse(link)
 				if err != nil {
 					t.Errorf("invalid link %q: %v", link, err)

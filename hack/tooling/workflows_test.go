@@ -75,6 +75,8 @@ func TestWorkflowsUseExistingTaskTargets(t *testing.T) {
 							continue
 						}
 						for _, target := range fields[i+1:] {
+							// A task may return a reference through shell command substitution.
+							target = strings.TrimSuffix(target, ")")
 							if strings.Contains(target, "=") || strings.HasPrefix(target, "-") {
 								break
 							}

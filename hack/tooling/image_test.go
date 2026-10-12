@@ -6,7 +6,9 @@
 package tooling_test
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,7 +23,7 @@ func TestKoImageTasks(t *testing.T) {
 			archive := filepath.Join(dir, "output with spaces", "controller.tar")
 			successful(t, dir, env, "task", "image:"+mode, "IMG=localhost:5000/team/controller:dev", "IMAGE_ARCHIVE="+archive, "IMAGE_PLATFORM=linux/amd64")
 			log := logContents(t, dir)
-			for _, want := range []string{"ko\tbuild\t./cmd\t--bare\t--tags=dev", "repository=localhost:5000/team/controller", "--image-refs=dist/image-refs.txt"} {
+			for _, want := range []string{"ko\tbuild\t./cmd\t--bare\t--tags=dev", "repository=localhost:5000/team/controller"} {
 				if !strings.Contains(log, want) {
 					t.Fatalf("missing %q: %s", want, log)
 				}
@@ -74,11 +76,10 @@ func TestImageRejectsInvalidInputs(t *testing.T) {
 func TestImageFailureCannotReuseOldArtifact(t *testing.T) {
 	dir, env := fixture(t)
 	write(t, filepath.Join(dir, "dist/controller.tar"), "old archive")
-	write(t, filepath.Join(dir, "dist/image-refs.txt"), "old reference")
 	if _, err := command(t, dir, append(env, "FAIL_TOOL=ko"), "task", "image:build", "IMG=example.com/controller:dev"); err == nil {
 		t.Fatal("ko failure was ignored")
 	}
-	for _, name := range []string{"dist/controller.tar", "dist/image-refs.txt"} {
+	for _, name := range []string{"dist/controller.tar"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Fatalf("stale output %s remains: %v", name, err)
 		}
@@ -101,7 +102,11 @@ func TestLocalImagePlatform(t *testing.T) {
 func TestHelmReleaseTasks(t *testing.T) {
 	dir, env := fixture(t)
 	digest := "sha256:" + strings.Repeat("b", 64)
-	successful(t, dir, append(env, "HELM_DIGEST="+digest, "CHART_REGISTRY=oci://localhost:5000/charts"), "task", "helm:push", "VERSION=v1.2.3-rc.1")
+	env = append(env, "HELM_DIGEST="+digest, "CHART_REGISTRY=oci://localhost:5000/charts", "GENERATOR_STDOUT=Generated manifests")
+	out, logs, err := stdoutCommand(t, dir, env, "task", "helm:push", "VERSION=v1.2.3-rc.1")
+	if err != nil || out != "localhost:5000/charts/change-windows@"+digest+"\n" {
+		t.Fatalf("incorrect published chart reference: %q %v\n%s", out, err, logs)
+	}
 	log := logContents(t, dir)
 	for _, want := range []string{
 		"helm\tpackage\tcharts/change-windows\t--version\t1.2.3-rc.1\t--app-version\t1.2.3-rc.1",
@@ -111,48 +116,99 @@ func TestHelmReleaseTasks(t *testing.T) {
 			t.Fatalf("release lost %q: %s", want, log)
 		}
 	}
-	refs := filepath.Join(dir, "dist/chart-refs.txt")
-	data, err := os.ReadFile(refs)
-	if err != nil || string(data) != "localhost:5000/charts/change-windows@"+digest+"\n" {
-		t.Fatalf("incorrect published chart reference: %s %v", data, err)
-	}
-	for _, failure := range []string{"FAIL_TOOL=helm", "HELM_DIGEST=invalid"} {
-		write(t, refs, "old digest")
-		if _, err := command(t, dir, append(env, failure), "task", "helm:push", "VERSION=1.2.3"); err == nil {
-			t.Fatalf("publishing accepted %s", failure)
+	for _, file := range []string{"dist/chart-refs.txt", "dist/charts/push.log"} {
+		if _, err := os.Stat(filepath.Join(dir, file)); !os.IsNotExist(err) {
+			t.Fatalf("unexpected reference/log artifact %s: %v", file, err)
 		}
-		if _, err := os.Stat(refs); !os.IsNotExist(err) {
-			t.Fatalf("failed publishing left a stale chart reference: %v", err)
+	}
+	for _, failure := range []string{"FAIL_TOOL=helm", "HELM_DIGEST=invalid", "HELM_DIGEST=" + digest + "\nDigest: " + digest} {
+		out, logs, err := stdoutCommand(t, dir, append(env, failure), "task", "helm:push", "VERSION=1.2.3")
+		if err == nil || out != "" {
+			t.Fatalf("failed publishing returned a reference for %s: %q %v\n%s", failure, out, err, logs)
 		}
 	}
 }
 
 func TestReleaseDigestOutputsAndSigning(t *testing.T) {
-	dir, env := fixture(t)
-	digest := "sha256:" + strings.Repeat("a", 64)
-	ref := "ghcr.io/example/controller:1.2.3@" + digest
-	write(t, filepath.Join(dir, "dist/image-refs.txt"), ref+"\n")
-	output := filepath.Join(dir, "github-output")
-	successful(t, dir, append(env, "GITHUB_OUTPUT="+output), "bash", "-euo", "pipefail", "-c", workflowStep(t, "docker-publish.yml", "publish-images", "image"))
-	data, err := os.ReadFile(output)
-	if err != nil || string(data) != "image=ghcr.io/example/controller\ndigest="+digest+"\n" {
-		t.Fatalf("wrong provenance output: %s %v", data, err)
-	}
-	successful(t, dir, env, "task", "image:sign")
-	if !strings.Contains(logContents(t, dir), "cosign\tsign\t--yes\t"+ref) {
-		t.Fatal("signing did not use the immutable digest")
-	}
-	for _, invalid := range []string{"image:latest", ref + "\nmalicious=value", "repo@sha256:short"} {
-		write(t, filepath.Join(dir, "dist/image-refs.txt"), invalid)
-		for _, args := range [][]string{
-			{"task", "image:sign"},
-			{"bash", "-euo", "pipefail", "-c", workflowStep(t, "docker-publish.yml", "publish-images", "image")},
-		} {
-			if _, err := command(t, dir, append(env, "GITHUB_OUTPUT="+output), args[0], args[1:]...); err == nil {
-				t.Fatalf("%s accepted invalid digest %q", args[0], invalid)
+	for _, tc := range []struct{ workflow, job, step, image string }{
+		{"docker-publish.yml", "publish-images", "image", "localhost:5000/team/controller"},
+		{"helm-publish.yml", "publish-helm-oci", "chart", "localhost:5000/charts/change-windows"},
+	} {
+		t.Run(tc.step, func(t *testing.T) {
+			dir, env := fixture(t)
+			digest := "sha256:" + strings.Repeat("0", 64)
+			output := filepath.Join(dir, "github-output")
+			env = append(env, "GITHUB_OUTPUT="+output, "VERSION=1.2.3", "IMG=localhost:5000/team/controller:1.2.3",
+				"CHART_REGISTRY=oci://localhost:5000/charts", "HELM_DIGEST="+digest, "GENERATOR_STDOUT=Generated manifests")
+			successful(t, dir, env, "bash", "-euo", "pipefail", "-c", workflowStep(t, tc.workflow, tc.job, tc.step))
+			data, err := os.ReadFile(output)
+			if err != nil || string(data) != "image="+tc.image+"\ndigest="+digest+"\n" {
+				t.Fatalf("wrong provenance output: %s %v", data, err)
 			}
+			ref := tc.image + "@" + digest
+			successful(t, dir, append(env, "IMAGE_REF="+ref), "task", "image:sign")
+			if !strings.Contains(logContents(t, dir), "cosign\tsign\t--yes\t"+ref) {
+				t.Fatal("signing did not use the published index/chart digest")
+			}
+		})
+	}
+}
+
+func TestKoPublishedIndexReference(t *testing.T) {
+	dir, env := fixture(t)
+	env = append(env, "GENERATOR_STDOUT=Generated objects")
+	out, logs, err := stdoutCommand(t, dir, env, "task", "image:push", "IMG=localhost:5000/team/controller:dev")
+	want := "localhost:5000/team/controller@sha256:" + strings.Repeat("0", 64) + "\n"
+	if err != nil || out != want {
+		t.Fatalf("expected one tag-free index reference, got %q: %v\n%s", out, err, logs)
+	}
+	if !strings.Contains(logs, "ko build progress") || !strings.Contains(logs, "Generated objects") {
+		t.Fatalf("build diagnostics were lost: %s", logs)
+	}
+	if strings.Contains(logContents(t, dir), "--image-refs") {
+		t.Fatal("publishing still uses the multi-reference recorder")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "dist/image-refs.txt")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected reference artifact: %v", err)
+	}
+}
+
+func TestInvalidPublishedReferences(t *testing.T) {
+	valid := "example.com/controller@sha256:" + strings.Repeat("a", 64)
+	for _, invalid := range []string{"", "image:latest", valid + "\nmalicious=value", valid + "\n" + valid, "repo@sha256:short"} {
+		t.Run(invalid, func(t *testing.T) {
+			dir, env := fixture(t)
+			env = append(env, "KO_TEST_REFERENCE="+invalid, "IMAGE_REF="+invalid)
+			if _, err := command(t, dir, env, "task", "image:sign"); err == nil {
+				t.Fatal("signer accepted invalid reference")
+			}
+			out, _, err := stdoutCommand(t, dir, env, "task", "image:push", "IMG=example.com/controller:dev")
+			if err == nil || out != "" {
+				t.Fatalf("publisher returned invalid reference: %q %v", out, err)
+			}
+			if strings.Contains(logContents(t, dir), "cosign\t") {
+				t.Fatal("signer ran for invalid input")
+			}
+		})
+	}
+	for _, failure := range []string{"FAIL_TOOL=ko", "KO_TEST_REFERENCE=wrong/repository@sha256:" + strings.Repeat("a", 64)} {
+		dir, env := fixture(t)
+		out, _, err := stdoutCommand(t, dir, append(env, failure), "task", "image:push", "IMG=example.com/controller:dev")
+		if err == nil || out != "" {
+			t.Fatalf("publisher returned reference after %s: %q %v", failure, out, err)
 		}
 	}
+}
+
+func stdoutCommand(t *testing.T, dir string, environment []string, name string, args ...string) (string, string, error) {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), environment...)
+	var diagnostics bytes.Buffer
+	cmd.Stderr = &diagnostics
+	out, err := cmd.Output()
+	return string(out), diagnostics.String(), err
 }
 
 func TestReleaseVersionAndSnapshot(t *testing.T) {

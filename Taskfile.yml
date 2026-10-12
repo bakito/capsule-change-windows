@@ -14,7 +14,7 @@ vars:
   IMAGE_PLATFORM: '{{.IMAGE_PLATFORM | default ""}}'
   PLATFORMS: '{{.PLATFORMS | default "linux/amd64,linux/arm64"}}'
   IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE | default "dist/controller.tar"}}'
-  IMAGE_REFS: '{{.IMAGE_REFS | default "dist/image-refs.txt"}}'
+  IMAGE_REF: '{{.IMAGE_REF | default ""}}'
   BUILD_DIR: '{{.BUILD_DIR | default "bin"}}'
   ARTIFACTS: '{{.ARTIFACTS | default "artifacts"}}'
   KIND_CLUSTER: '{{.KIND_CLUSTER | default "scheduled-action-e2e"}}'
@@ -25,7 +25,7 @@ vars:
   ENTERPRISE_VERSION: '{{.ENTERPRISE_VERSION | default ""}}'
   ENTERPRISE_REGISTRY: '{{.ENTERPRISE_REGISTRY | default "registry.projectcapsule.dev"}}'
   DRY_RUN: '{{.DRY_RUN | default "false"}}'
-  DOCS_BASE_URL: '{{.DOCS_BASE_URL | default "https://projectcapsule.github.io/schedule-action-controller/"}}'
+  DOCS_BASE_URL: '{{.DOCS_BASE_URL | default "https://change-windows.addons.projectcapsule.dev/"}}'
 
   LAPTOP_HOST_IP: '{{.LAPTOP_HOST_IP | default ""}}'
   DEV_HOST: '{{.DEV_HOST | default .LAPTOP_HOST_IP | default ""}}'
@@ -518,7 +518,6 @@ tasks:
       IMAGE_PLATFORM: '{{.IMAGE_PLATFORM}}'
       PLATFORMS: '{{.PLATFORMS}}'
       IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE}}'
-      IMAGE_REFS: '{{.IMAGE_REFS}}'
     preconditions:
       - sh: for tool in go controller-gen ko helm kubectl openssl{{if eq .DEV_IMAGE_MODE "kind"}} kind{{end}}; do command -v "$tool" >/dev/null || exit 1; done
         msg: Missing development tools. Run devbox run -- task or enter devbox shell; see DEVELOPMENT.md.
@@ -585,8 +584,7 @@ tasks:
           # Kind runs inside containers which may not support nested user namespaces.
           values+=(--set manager.hostUsers=true)
         else
-          task image:push
-          image=$(cat "$IMAGE_REFS")
+          image=$(task image:push)
           if [[ ! "$image" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ || "${image%@*}" != "${IMG%:*}" ]]; then
             echo 'ko did not produce the expected immutable image reference' >&2
             exit 1
@@ -652,12 +650,10 @@ tasks:
       IMG: '{{.IMG}}'
       IMAGE_PLATFORM: '{{.IMAGE_PLATFORM}}'
       IMAGE_ARCHIVE: '{{.IMAGE_ARCHIVE}}'
-      IMAGE_REFS: '{{.IMAGE_REFS}}'
     cmds:
       - task: generate
       - |
         : "${IMG:?IMG must be a tagged image reference}"
-        : "${IMAGE_REFS:=dist/image-refs.txt}"
         # Split the tag from the last path component, retaining registry ports.
         if [[ "$IMG" == *@* || "${IMG##*/}" != *:* || "$IMG" == *[[:space:]]* ]]; then
           echo 'IMG must include a tag and must not contain a digest or whitespace' >&2
@@ -671,10 +667,7 @@ tasks:
         fi
         export KO_DOCKER_REPO="$image_repo"
         export CGO_ENABLED=0
-        mkdir -p "$(dirname "$IMAGE_REFS")"
-        # Never leave a previous successful reference available after a failed build.
-        rm -f "$IMAGE_REFS"
-        args=(build ./cmd --bare "--tags=$image_tag" "--image-refs=$IMAGE_REFS")
+        args=(build ./cmd --bare "--tags=$image_tag")
         : "${IMAGE_PLATFORM:=linux/$(go env GOHOSTARCH)}"
         if [[ "$IMAGE_PLATFORM" != linux/* || "$IMAGE_PLATFORM" == *,* ]]; then
           echo 'IMAGE_PLATFORM must select one Linux architecture for the local archive' >&2
@@ -685,17 +678,15 @@ tasks:
         ko "${args[@]}" --push=false "--platform=$IMAGE_PLATFORM" "--tarball=$IMAGE_ARCHIVE" --tag-only
 
   image:push:
-    desc: Build and publish multi-platform images with ko (explicit invocation only).
+    desc: Publish multi-platform images with ko and print the immutable index reference.
     aliases: [ko-publish-controller]
     env:
       IMG: '{{.IMG}}'
       PLATFORMS: '{{.PLATFORMS}}'
-      IMAGE_REFS: '{{.IMAGE_REFS}}'
     cmds:
-      - task: generate
+      - task generate >&2
       - |
         : "${IMG:?IMG must be a tagged image reference}"
-        : "${IMAGE_REFS:=dist/image-refs.txt}"
         # Split the tag from the last path component, retaining registry ports.
         if [[ "$IMG" == *@* || "${IMG##*/}" != *:* || "$IMG" == *[[:space:]]* ]]; then
           echo 'IMG must include a tag and must not contain a digest or whitespace' >&2
@@ -709,22 +700,26 @@ tasks:
         fi
         export KO_DOCKER_REPO="$image_repo"
         export CGO_ENABLED=0
-        mkdir -p "$(dirname "$IMAGE_REFS")"
-        # Never leave a previous successful reference available after a failed build.
-        rm -f "$IMAGE_REFS"
-        args=(build ./cmd --bare "--tags=$image_tag" "--image-refs=$IMAGE_REFS")
-        ko "${args[@]}" --push=true "--platform=$PLATFORMS"
+        args=(build ./cmd --bare "--tags=$image_tag")
+        # --image-refs includes platform manifests as well as the index. stdout
+        # identifies the published index; keep only that immutable reference.
+        ref=$(ko "${args[@]}" --push=true "--platform=$PLATFORMS")
+        if [[ ! "$ref" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] ||
+           [[ "${ref%@*}" != "$image_repo" && "${ref%@*}" != "$IMG" ]]; then
+          echo 'ko did not produce the expected immutable image reference' >&2
+          exit 1
+        fi
+        printf '%s@%s\n' "$image_repo" "${ref##*@}"
 
   image:sign:
-    desc: Sign the immutable image reference written by image:push.
+    desc: Sign an immutable IMAGE_REF returned by image:push or helm:push.
     env:
-      IMAGE_REFS: '{{.IMAGE_REFS}}'
+      IMAGE_REF: '{{.IMAGE_REF}}'
     cmds:
       - |
-        : "${IMAGE_REFS:=dist/image-refs.txt}"
-        ref=$(cat "$IMAGE_REFS")
+        ref=${IMAGE_REF:?Set IMAGE_REF to the immutable reference to sign}
         if [[ ! "$ref" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
-          echo 'Expected one immutable image reference; run task image:push first' >&2
+          echo 'IMAGE_REF must be one immutable image reference' >&2
           exit 1
         fi
         cosign sign --yes "$ref"
@@ -855,23 +850,26 @@ tasks:
         helm package charts/change-windows --version "$version" --app-version "$version" --destination dist/charts
 
   helm:push:
-    desc: Publish the chart to CHART_REGISTRY (explicit invocation only).
+    desc: Publish the chart to CHART_REGISTRY and print its immutable reference.
     env:
       VERSION: '{{.VERSION}}'
     cmds:
-      - rm -f dist/chart-refs.txt
-      - task: helm:package
+      - task helm:package >&2
       - |
         : "${VERSION:?VERSION is required}"
         : "${CHART_REGISTRY:=oci://ghcr.io/projectcapsule/charts}"
         version=${VERSION#v}
-        helm push "dist/charts/change-windows-$version.tgz" "$CHART_REGISTRY" 2>&1 | tee dist/charts/push.log
-        digest=$(sed -n 's/^Digest: \(sha256:[a-f0-9]*\)$/\1/p' dist/charts/push.log)
+        if ! output=$(helm push "dist/charts/change-windows-$version.tgz" "$CHART_REGISTRY" 2>&1); then
+          printf '%s\n' "$output" >&2
+          exit 1
+        fi
+        printf '%s\n' "$output" >&2
+        digest=$(printf '%s\n' "$output" | sed -n 's/^Digest: \(sha256:[a-f0-9]*\)$/\1/p')
         if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
           echo 'Helm did not return a valid digest' >&2
           exit 1
         fi
-        printf '%s/change-windows@%s\n' "${CHART_REGISTRY#oci://}" "$digest" > dist/chart-refs.txt
+        printf '%s/change-windows@%s\n' "${CHART_REGISTRY#oci://}" "$digest"
 
   release:check:
     desc: Validate GoReleaser configuration.

@@ -137,7 +137,7 @@ func TestDevDeployRejectsWrongDigest(t *testing.T) {
 	dir, env := deploymentFixture(t)
 	// A successful publisher must still report the exact repository that was requested.
 	ko := filepath.Join(dir, "tools/ko")
-	write(t, ko, "#!/usr/bin/env bash\nfor arg in \"$@\"; do case \"$arg\" in --image-refs=*) printf 'other/repository@sha256:%064d\\n' 0 > \"${arg#*=}\" ;; esac; done\n")
+	write(t, ko, "#!/usr/bin/env bash\nprintf 'other/repository@sha256:%064d\\n' 0\n")
 	if err := os.Chmod(ko, 0o755); err != nil {
 		t.Fatal(err)
 	}

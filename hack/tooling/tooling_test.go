@@ -117,14 +117,29 @@ MANAGER
 fi
 if [[ "$name" == setup-envtest ]]; then printf '%s\n' "$ASSET_DIRECTORY"; fi
 if [[ "$name" == go && "${1:-}" == env && "${2:-}" == GOHOSTARCH ]]; then printf 'arm64\n'; fi
+if [[ "$name" == controller-gen && -n "${GENERATOR_STDOUT:-}" ]]; then printf '%s\n' "$GENERATOR_STDOUT"; fi
+if [[ "$name" == helm && "${1:-}" == package ]]; then printf 'Packaged chart\n'; fi
 if [[ "$name" == helm && "${1:-}" == push ]]; then printf 'Digest: %s\n' "${HELM_DIGEST:-invalid}"; fi
 if [[ "$name" == ko && "${1:-}" == build ]]; then
+  tag=latest
   for arg in "$@"; do
     case "$arg" in
-      --image-refs=*) printf '%s@sha256:%064d\n' "$KO_DOCKER_REPO" 0 > "${arg#*=}" ;;
+      --tags=*) tag="${arg#*=}" ;;
+      # ko records the index AND child manifests for multi-platform builds.
+      --image-refs=*)
+        printf '%s@sha256:%064d\n' "$KO_DOCKER_REPO" 0 > "${arg#*=}"
+        if [[ "$*" == *linux/amd64,linux/arm64* ]]; then
+          printf '%s@sha256:%064d\n' "$KO_DOCKER_REPO" 1 "$KO_DOCKER_REPO" 2 >> "${arg#*=}"
+        fi ;;
       --tarball=*) printf 'test image archive\n' > "${arg#*=}" ;;
     esac
   done
+  printf 'ko build progress\n' >&2
+  if [[ "${KO_TEST_REFERENCE+x}" ]]; then
+    printf '%s\n' "$KO_TEST_REFERENCE"
+  else
+    printf '%s:%s@sha256:%064d\n' "$KO_DOCKER_REPO" "$tag" 0
+  fi
 fi
 `)
 		if err := os.Chmod(filename, 0o755); err != nil {
