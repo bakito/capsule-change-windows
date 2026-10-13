@@ -249,3 +249,57 @@ func workflowStep(t *testing.T, file, job, id string) string {
 	t.Fatalf("missing step %s/%s in %s", job, id, file)
 	return ""
 }
+
+func TestEnterpriseRejectsInvalidControls(t *testing.T) {
+	for _, argument := range []string{"DRY_RUN=tru", "CHANNEL=unknown", "ENTERPRISE_VERSION="} {
+		t.Run(argument, func(t *testing.T) {
+			dir, env := fixture(t)
+			out, err := command(t, dir, env, "task", "enterprise:release", "ENTERPRISE_VERSION=1.2.3", argument)
+			if err == nil {
+				t.Fatalf("invalid control accepted: %s", out)
+			}
+			if log := logContents(t, dir); strings.Contains(log, "helm\t") || strings.Contains(log, "ko\t") {
+				t.Fatalf("invalid control reached release tools: %s", log)
+			}
+		})
+	}
+}
+
+func TestEnterpriseStopsBeforePublishingOnPackageFailure(t *testing.T) {
+	dir, env := fixture(t)
+	if out, err := command(t, dir, append(env, "FAIL_TOOL=helm"), "task", "enterprise:release", "ENTERPRISE_VERSION=1.2.3"); err == nil {
+		t.Fatalf("failed package accepted: %s", out)
+	}
+	log := logContents(t, dir)
+	if !strings.Contains(log, "helm\tpackage") || strings.Contains(log, "ko\t") || strings.Contains(log, "helm\tpush") {
+		t.Fatalf("publishing ran after package failure: %s", log)
+	}
+}
+
+func TestChartVersionValidationUsesHelm(t *testing.T) {
+	helm, err := exec.LookPath("helm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"v1.2.3-rc.1", "invalid", "1.2.3; touch unexpected"} {
+		t.Run(version, func(t *testing.T) {
+			dir, env := fixture(t)
+			copyFile(t, repository(t), dir, "charts/change-windows/Chart.yaml")
+			write(t, filepath.Join(dir, "tools/helm"), "#!/usr/bin/env bash\nexec \"$REAL_HELM\" \"$@\"\n")
+			out, err := command(t, dir, append(env, "REAL_HELM="+helm), "task", "helm:package", "VERSION="+version)
+			if version == "v1.2.3-rc.1" {
+				if err != nil {
+					t.Fatalf("valid version rejected: %v %s", err, out)
+				}
+				if _, err := os.Stat(filepath.Join(dir, "dist/charts/change-windows-1.2.3-rc.1.tgz")); err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(strings.ToLower(out), "invalid semantic version") {
+				t.Fatalf("expected Helm's version error: %v %s", err, out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "unexpected")); !os.IsNotExist(err) {
+				t.Fatal("version executed as shell code")
+			}
+		})
+	}
+}

@@ -14,11 +14,47 @@ kubectl -n capsule-system logs \
 The log command uses the release name and namespace from the
 [installation guide]({{< relref "/docs/getting-started/installation" >}}).
 
-Check `status.observedGeneration` alongside the `Ready` condition. `active`
-reports the reconciled window state; `windowStart`, `windowEnd`, and
-`nextTransition` report known boundaries. An absent end can mean a continuous
-window extends beyond the scheduling horizon. `pendingResources` counts journal
-entries still requiring completion.
+`kubectl get changewindows` shows **Ready**, **State**, **Next Transition** and
+**Age**. `kubectl get changewindows -o wide` also shows the **Active** condition
+and the number of **Pending** resource actions.
+
+The two standard Kubernetes conditions describe different facts:
+
+- **Ready=True**, reason `Succeeded`: schedules and resource actions reconciled
+  successfully for `observedGeneration`. A failure sets `Ready=False` with reason
+  `ReconcileError`; it does not imply that an active maintenance restriction stopped.
+- **Active=True**, reason `Active`: the current time falls inside a scheduled
+  window. Outside a window it is `False`, with the lifecycle reason below.
+  Invalid policies produce `Active=Unknown`.
+
+| State (Active condition reason) | Meaning |
+| --- | --- |
+| `Planned` | Waiting for the first window observed by this controller. |
+| `Active` | A scheduled window is currently active, even if an action failed. |
+| `Finishing` | The window ended, but resource restoration remains outstanding. |
+| `Finished` | The last observed window and its resource actions finished. This persists between recurring windows until the next window starts. |
+| `Unknown` | The policy could not be compiled, so the window state cannot be determined. |
+| `Unscheduled` | The cron schedules have no upcoming occurrence and no window was observed. |
+
+`Next Transition` remains populated after `Finished`: it is the next scheduled
+start. During `Active`, it reports the current end. It is displayed as an absolute
+UTC timestamp. An absent end can mean a continuous window extends beyond the
+bounded scheduling horizon.
+
+```shell
+kubectl wait changewindow/development-downtime --for=condition=Ready --timeout=60s
+kubectl wait changewindow/development-downtime --for=condition=Active --timeout=1h
+kubectl get changewindow development-downtime -o wide
+```
+
+Check each condition's `observedGeneration` against `metadata.generation` when
+using status for automation. `lastTransitionTime` changes when the condition's
+True/False/Unknown value changes. The existing `status.active` boolean remains
+available for compatibility; conditions distinguish an unknown schedule from an
+inactive one. `windowStart` and `windowEnd` describe the active or next window,
+while `pendingResources` counts journal entries still requiring completion.
+`Finished` reports a controller-observed cycle, not a historical audit of windows
+that elapsed while the controller was unavailable.
 
 Admission evaluates wall-clock schedules itself. A status update is not the
 trigger that enables or disables restrictions.

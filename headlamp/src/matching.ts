@@ -25,24 +25,33 @@ export function matchesSelector(
   });
 }
 
+/** The same current-label selection is used by detail and maintenance views. */
+export function matchesNamespace(
+  action: ChangeWindowData,
+  namespace: Resource,
+  systemNamespace = DEFAULT_SYSTEM_NAMESPACE
+): boolean {
+  return (
+    namespace.kind === 'Namespace' &&
+    ![systemNamespace, 'kube-system', 'kube-public', 'kube-node-lease'].includes(
+      namespace.metadata.name
+    ) &&
+    !!action.spec.namespaceSelectors?.some(selector =>
+      matchesSelector(selector, namespace.metadata.labels)
+    )
+  );
+}
+
 export function matchingTargets(
   action: ChangeWindowData,
   resource: Resource,
   namespace: Resource,
   systemNamespace = DEFAULT_SYSTEM_NAMESPACE
 ): Target[] {
-  const name = resource.metadata.namespace;
   if (
-    !name ||
-    namespace.kind !== 'Namespace' ||
-    namespace.metadata.name !== name ||
-    [systemNamespace, 'kube-system', 'kube-public', 'kube-node-lease'].includes(name)
-  )
-    return [];
-  if (
-    !action.spec.namespaceSelectors.some(selector =>
-      matchesSelector(selector, namespace.metadata.labels)
-    )
+    !resource.metadata.namespace ||
+    resource.metadata.namespace !== namespace.metadata.name ||
+    !matchesNamespace(action, namespace, systemNamespace)
   )
     return [];
   return action.spec.targets.filter(

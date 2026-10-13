@@ -4,8 +4,21 @@ weight: 80
 ---
 
 The companion plugin adds **Change Windows** to Headlamp's main navigation. Its
-overview combines a weekly calendar with a searchable table of ChangeWindows.
-Open an entry for its schedules, namespace selection, targets, actions and rules.
+overview combines weekly, monthly and yearly calendar views with a searchable
+table of ChangeWindows. Use **Previous**, **Next** and **Today** to navigate the
+selected period. In the yearly view, select a month to open its calendar or a
+highlighted day to open its week. Monthly cells show up to three entries, with a
+link to the week when more windows overlap.
+The table shows controller readiness and lifecycle separately from the wall-clock
+preview. Open an entry for Headlamp's standard metadata panel, including labels,
+annotations, lifecycle and next transition. Conditions and events follow it,
+then matching namespaces, a calendar for that window, schedules, targets, actions
+and rules. **View YAML**
+opens the resource using Headlamp's standard viewer.
+
+Weekly and monthly calendars use a compact grid. On mobile, the week becomes a
+list of days and the month scrolls horizontally. Both the overview and individual
+window calendars support all three views.
 
 The calendar displays time in your browser's time zone, while each schedule keeps
 its configured zone. Overlapping and adjacent windows are merged. Active state
@@ -42,10 +55,21 @@ a local archive when packaging. Install it as `capsule-change-windows` using you
 It is tested against Headlamp 0.45.0. The controller and CRD are separate
 prerequisites; this UI does not install them.
 
-Grant the viewer read access to ChangeWindows and namespaces. Parent workload
-reads are needed for owner matching. The repository includes a sample
-`headlamp/deploy/viewer-role.yaml`; bind it deliberately and narrow workload reads
-to individual namespaces where appropriate. The plugin uses Headlamp's existing
+Grant viewers get/list/watch access to ChangeWindows, get access to namespaces
+for maintenance matching, and list/watch access to namespaces for the selection
+table. The table shows matching namespaces returned to the signed-in user in the
+selected cluster, with protected namespaces excluded. It follows current labels;
+it does not claim that these namespaces participated in an earlier action.
+Node-only windows do not list namespaces.
+
+Events require list access to core/v1 Events across namespaces, since ChangeWindows
+are cluster-scoped. Requests select the current resource UID so events from a
+deleted object with the same name are excluded. Events refresh every 30 seconds
+and are limited to 2,000 entries. Missing namespace or event permissions produce
+an explicit message in that section; the rest of the detail page remains usable.
+
+Parent workload reads are needed for owner matching; narrow those permissions to
+individual namespaces where appropriate. The plugin uses Headlamp's existing
 login and never needs a new administrator credential.
 
 When using a custom controller namespace, configure it per Headlamp cluster in

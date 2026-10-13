@@ -142,12 +142,12 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `observedGeneration` _integer_ |  |  | Optional: \{\} <br /> |
-| `active` _boolean_ |  |  | Optional: \{\} <br /> |
+| `active` _boolean_ | Active mirrors the Active condition for compatibility. Conditions distinguish unknown state. |  | Optional: \{\} <br /> |
 | `windowStart` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
 | `windowEnd` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ | WindowEnd is absent when the effective end is beyond the bounded scheduling horizon. |  | Optional: \{\} <br /> |
-| `nextTransition` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ |  |  | Optional: \{\} <br /> |
+| `nextTransition` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ | NextTransition is the active window's end or the next planned start, including after Finished. |  | Optional: \{\} <br /> |
 | `pendingResources` _integer_ | PendingResources counts journal entries still requiring completion. |  | Optional: \{\} <br /> |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta) array_ |  |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta) array_ | Conditions report reconciliation readiness (Ready) and schedule occupancy (Active).<br />Active reasons are Planned before the first observed window, Active during a window,<br />Finishing while restoration is outstanding, and Finished after an observed window completes.<br />Finished persists until another window starts. Unknown denotes invalid policy;<br />Unscheduled means no occurrence is available and none has been observed. |  | Optional: \{\} <br /> |
 
 ## Config
 

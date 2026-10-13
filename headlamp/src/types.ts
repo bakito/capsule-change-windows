@@ -15,6 +15,9 @@ export interface Resource {
     namespace?: string;
     uid?: string;
     generation?: number;
+    creationTimestamp?: string;
+    resourceVersion?: string;
+    annotations?: Record<string, string>;
     labels?: Record<string, string>;
     ownerReferences?: Array<{
       apiVersion: string;
@@ -42,7 +45,7 @@ export interface Target {
 
 export interface ChangeWindowData extends Resource {
   spec: {
-    namespaceSelectors: LabelSelector[];
+    namespaceSelectors?: LabelSelector[];
     schedules: Schedule[];
     targets: Target[];
     serviceAccount?: { namespace: string; name: string };
@@ -67,7 +70,14 @@ export interface ChangeWindowData extends Resource {
     nextTransition?: string;
     pendingResources?: number;
     observedGeneration?: number;
-    conditions?: Array<{ type: string; status: string; reason?: string; message?: string }>;
+    conditions?: Array<{
+      type: string;
+      status: string;
+      reason?: string;
+      message?: string;
+      observedGeneration?: number;
+      lastTransitionTime?: string;
+    }>;
   };
 }
 

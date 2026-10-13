@@ -6,7 +6,7 @@ import type { Resource } from './types';
 describe('namespace and resource selection', () => {
   it('ORs namespace selectors and ANDs requirements within each selector', () => {
     const action = actionFixture();
-    action.spec.namespaceSelectors.unshift({ matchLabels: { environment: 'staging' } });
+    action.spec.namespaceSelectors!.unshift({ matchLabels: { environment: 'staging' } });
     expect(matchingTargets(action, deploymentFixture, namespaceFixture)).toHaveLength(1);
     expect(
       matchingTargets(

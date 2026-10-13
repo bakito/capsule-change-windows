@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"sigs.k8s.io/yaml"
 )
 
 func hugoFixture(t *testing.T) (string, []string) {
@@ -29,54 +31,11 @@ description: Generated reference for the ChangeWindow Kubernetes API.
 ## Example
 A generated type.
 `)
-	hugo := filepath.Join(dir, "tools/hugo")
-	write(t, hugo, `#!/usr/bin/env bash
-if [[ "$1" == version ]]; then
-  printf '%s\n' "$TEST_HUGO_VERSION"
-  exit "${TEST_HUGO_VERSION_EXIT:-0}"
-fi
-printf 'hugo\t%s\n' "$@" >> "$TOOL_LOG"
-`)
-	if err := os.Chmod(hugo, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	return dir, env
-}
-
-func TestHugoVersionCheck(t *testing.T) {
-	for _, tc := range []struct {
-		name, version, exit string
-		accepted            bool
-	}{
-		{name: "old-homebrew", version: "hugo v0.134.0+extended darwin/arm64 VendorInfo=brew"},
-		{name: "older-patch", version: "hugo v0.165.9+extended linux/amd64"},
-		{name: "standard-edition", version: "hugo v0.166.0 linux/amd64"},
-		{name: "missing", exit: "127"},
-		{name: "malformed", version: "unexpected output"},
-		{name: "version-failed", version: "hugo v0.166.0+extended linux/amd64", exit: "1"},
-		{name: "pinned", version: "hugo v0.166.0-78400b4+extended darwin/arm64", accepted: true},
-		{name: "newer-patch", version: "hugo v0.166.1+extended linux/amd64", accepted: true},
-		{name: "newer-minor", version: "hugo v0.167.0+extended+withdeploy linux/amd64", accepted: true},
-		{name: "newer-major", version: "hugo v1.0.0+extended linux/amd64", accepted: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dir, env := hugoFixture(t)
-			env = append(env, "TEST_HUGO_VERSION="+tc.version, "TEST_HUGO_VERSION_EXIT="+tc.exit)
-			out, err := command(t, dir, env, "task", "docs:toolchain")
-			if (err == nil) != tc.accepted {
-				t.Fatalf("accepted=%v, error=%v, output=%s", tc.accepted, err, out)
-			}
-			if !tc.accepted && (!strings.Contains(out, "requires Hugo Extended >= 0.166.0") ||
-				!strings.Contains(out, "devbox run -- task docs:serve")) {
-				t.Fatalf("missing actionable version error: %s", out)
-			}
-		})
-	}
 }
 
 func TestAPIReferenceTasks(t *testing.T) {
 	dir, env := hugoFixture(t)
-	env = append(env, "TEST_HUGO_VERSION=hugo v0.166.0+extended linux/amd64")
 	reference := filepath.Join(dir, "docs/content/docs/reference/api.md")
 	write(t, reference, "stale reference\n")
 	if out, err := command(t, dir, env, "task", "docs:check"); err == nil || !strings.Contains(out, "API reference is stale") {
@@ -97,30 +56,23 @@ func TestAPIReferenceTasks(t *testing.T) {
 	}
 }
 
-func TestDocumentationTasksCheckHugoBeforeWork(t *testing.T) {
+func TestDocumentationTaskCommands(t *testing.T) {
 	for _, task := range []string{"docs:serve", "docs:build", "docs:check", "docs:test:browser"} {
 		t.Run(task, func(t *testing.T) {
 			dir, env := hugoFixture(t)
-			out, err := command(t, dir, append(env, "TEST_HUGO_VERSION=hugo v0.134.0+extended darwin/arm64"), "task", task)
-			if err == nil || !strings.Contains(out, "requires Hugo Extended") {
-				t.Fatalf("old Hugo did not stop %s: %v\n%s", task, err, out)
-			}
-			if log := logContents(t, dir); log != "" {
-				t.Fatalf("unsupported Hugo still generated/built files: %s", log)
-			}
-			successful(t, dir, append(env, "TEST_HUGO_VERSION=hugo v0.166.0+extended linux/amd64"), "task", task)
+			successful(t, dir, env, "task", task)
 			log := logContents(t, dir)
 			if !strings.Contains(log, "npm\tci\t--ignore-scripts") {
 				t.Fatalf("Doks dependencies were not installed: %s", log)
 			}
 			if task != "docs:test:browser" && !strings.Contains(log, "crd-ref-docs\t") {
-				t.Fatalf("compatible Hugo did not continue %s: %s", task, log)
+				t.Fatalf("documentation task did not continue %s: %s", task, log)
 			}
 			if task == "docs:check" && !strings.Contains(log, "go\ttest") ||
 				task == "docs:test:browser" && !strings.Contains(log, "npm\t--prefix\tdocs\trun\ttest:browser") ||
 				task == "docs:build" && !strings.Contains(log, "npm\t--prefix\tdocs\trun\tbuild") ||
 				task == "docs:serve" && !strings.Contains(log, "npm\t--prefix\tdocs\trun\tdev") {
-				t.Fatalf("compatible Hugo did not run %s: %s", task, log)
+				t.Fatalf("documentation task did not run %s: %s", task, log)
 			}
 		})
 	}
@@ -141,7 +93,6 @@ func TestHugoVersionRequirementsAgree(t *testing.T) {
 	version := config.Packages["hugo"]
 	for file, expected := range map[string]string{
 		"docs/hugo.toml": "min = '" + version + "'",
-		"Taskfile.yml":   "minimum=" + version + "\n",
 	} {
 		data, err := os.ReadFile(filepath.Join(root, file))
 		if err != nil || !strings.Contains(string(data), expected) {
@@ -154,7 +105,7 @@ func TestDocumentationTasksStopOnInstallFailure(t *testing.T) {
 	for _, task := range []string{"docs:serve", "docs:build", "docs:check", "docs:test:browser"} {
 		t.Run(task, func(t *testing.T) {
 			dir, env := hugoFixture(t)
-			env = append(env, "TEST_HUGO_VERSION=hugo v0.166.0+extended linux/amd64", "FAIL_TOOL=npm")
+			env = append(env, "FAIL_TOOL=npm")
 			if out, err := command(t, dir, env, "task", task); err == nil {
 				t.Fatalf("failed dependency installation did not stop %s: %s", task, out)
 			}
@@ -164,4 +115,45 @@ func TestDocumentationTasksStopOnInstallFailure(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDocumentationDeploymentUsesHTTPS(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repository(t), ".github/workflows/docs.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Env  map[string]string
+		Jobs map[string]struct {
+			Env   map[string]string
+			Steps []struct {
+				Run string
+				Env map[string]string
+			}
+		}
+	}
+	if err := yaml.Unmarshal(data, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	job := workflow.Jobs["build"]
+	for _, step := range job.Steps {
+		if !strings.Contains(step.Run, "task docs:check docs:build") {
+			continue
+		}
+		dir, env := hugoFixture(t)
+		for _, values := range []map[string]string{workflow.Env, job.Env, step.Env} {
+			if value, exists := values["DOCS_BASE_URL"]; exists {
+				if !strings.HasPrefix(value, "https://") {
+					t.Fatalf("Pages may report HTTP: documentation build must use a known HTTPS base URL, got %q", value)
+				}
+				env = append(env, "DOCS_BASE_URL="+value)
+			}
+		}
+		successful(t, dir, env, "task", "docs:build")
+		if log := logContents(t, dir); !strings.Contains(log, "--baseURL\thttps://change-windows.addons.projectcapsule.dev/") {
+			t.Fatalf("published Hugo build must resolve its scripts and search index over HTTPS: %s", log)
+		}
+		return
+	}
+	t.Fatal("documentation build step not found")
 }

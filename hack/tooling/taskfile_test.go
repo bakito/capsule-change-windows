@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"sigs.k8s.io/yaml"
 )
@@ -25,7 +27,8 @@ func TestTaskShell(t *testing.T) {
 	}
 	var taskfile struct {
 		Tasks map[string]struct {
-			Cmds []any
+			Cmds          []any
+			Preconditions []struct{ Sh string }
 		}
 	}
 	if err := yaml.Unmarshal(data, &taskfile); err != nil {
@@ -33,7 +36,11 @@ func TestTaskShell(t *testing.T) {
 	}
 	template := regexp.MustCompile("{{.*?}}")
 	for name, task := range taskfile.Tasks {
-		for index, command := range task.Cmds {
+		commands := append([]any(nil), task.Cmds...)
+		for _, precondition := range task.Preconditions {
+			commands = append(commands, precondition.Sh)
+		}
+		for index, command := range commands {
 			source, ok := command.(string)
 			if !ok {
 				mapping, ok := command.(map[string]any)
@@ -180,5 +187,83 @@ func TestManifestsTargetHelm(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "config")); !os.IsNotExist(err) {
 		t.Fatalf("manifest generation must not recreate config/: %v", err)
+	}
+}
+
+func TestE2EStopsWhenClusterDiscoveryFails(t *testing.T) {
+	dir, env := deploymentFixture(t)
+	out, err := command(t, dir, append(env, "FAIL_TOOL=kind"), "task", "e2e", "KIND_CLUSTER=isolated")
+	if err == nil {
+		t.Fatalf("failed discovery accepted: %s", out)
+	}
+	log := logContents(t, dir)
+	if !strings.Contains(log, "kind\tget\tclusters") || strings.Contains(log, "kind\tcreate") || strings.Contains(log, "kind\tdelete") || strings.Contains(log, "ko\t") {
+		t.Fatalf("failed cluster discovery did not stop setup: %s", log)
+	}
+}
+
+func TestE2ESignalCleanup(t *testing.T) {
+	dir, env := fixture(t)
+	kind := filepath.Join(dir, "tools/kind")
+	write(t, kind, `#!/usr/bin/env bash
+set -euo pipefail
+printf 'kind\t%s\t%s\n' "$1" "$2" >> "$TOOL_LOG"
+if [[ "$1 $2" == 'create cluster' ]]; then
+  printf '%s' "$KUBECONFIG" > "$PRIVATE_CONFIG_RECORD"
+  trap 'exit 143' TERM INT
+  while true; do sleep 0.1; done
+fi
+`)
+	if err := os.Chmod(kind, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	record := filepath.Join(dir, "private-config")
+	output, err := os.Create(filepath.Join(dir, "output.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer output.Close()
+	cmd := exec.Command("task", "e2e", "KIND_CLUSTER=isolated")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), append(env, "PRIVATE_CONFIG_RECORD="+record)...)
+	cmd.Stdout, cmd.Stderr = output, output
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	deadline := time.Now().Add(10 * time.Second)
+	var config []byte
+	for time.Now().Before(deadline) {
+		config, _ = os.ReadFile(record)
+		if len(config) > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(config) == 0 {
+		t.Fatal("cluster creation did not start")
+	}
+	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("interrupted e2e reported success")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("interrupted e2e did not terminate")
+	}
+	log := logContents(t, dir)
+	for _, call := range []string{"kind\texport\tlogs", "kind\tdelete\tcluster"} {
+		if !strings.Contains(log, call) {
+			t.Errorf("missing cleanup %q: %s", call, log)
+		}
+	}
+	if _, err := os.Stat(string(config)); !os.IsNotExist(err) {
+		t.Fatalf("temporary credentials retained: %v", err)
 	}
 }

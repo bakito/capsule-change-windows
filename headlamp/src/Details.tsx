@@ -1,10 +1,9 @@
-import { Link, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Resource, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
   Alert,
   Box,
   Chip,
-  CircularProgress,
   Stack,
   Table,
   TableBody,
@@ -15,10 +14,13 @@ import {
 } from '@mui/material';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { readyStatus, useCurrentProjections, useNow } from './hooks';
-import { formatTime, LoadError, ROUTE } from './Overview';
+import { lifecycleStatus, readyStatus, useCurrentProjections, useNow } from './hooks';
+import { NamespaceSelection } from './NamespaceSelection';
+import { formatTime } from './Overview';
 import { ChangeWindow } from './resources';
 import { currentWindow, HORIZON } from './schedule';
+import { WindowCalendar } from './WindowCalendar';
+import { WindowEvents } from './WindowEvents';
 
 export function Details() {
   const cluster = getCluster();
@@ -29,30 +31,63 @@ export function Details() {
 
 function ClusterDetails({ cluster }: { cluster: string }) {
   const { name } = useParams<{ name: string }>();
-  const [item, error] = ChangeWindow.useGet<ChangeWindow>(name, undefined, { cluster });
+  return (
+    <Resource.DetailsGrid
+      resourceType={ChangeWindow}
+      name={name}
+      cluster={cluster}
+      backLink={`/c/${encodeURIComponent(cluster)}/change-windows`}
+      noDefaultActions
+      actions={item => (item ? [<Resource.ViewButton key="yaml" item={item} />] : [])}
+      extraInfo={item =>
+        item
+          ? [
+              { name: 'Controller', value: readyStatus(item.jsonData) },
+              { name: 'Lifecycle', value: lifecycleStatus(item.jsonData) },
+              {
+                name: 'Next transition',
+                value: item.jsonData.status?.nextTransition
+                  ? formatTime(Date.parse(item.jsonData.status.nextTransition))
+                  : 'Not reported',
+              },
+              { name: 'Pending resources', value: item.jsonData.status?.pendingResources || 0 },
+            ]
+          : []
+      }
+      extraSections={item =>
+        item
+          ? [
+              {
+                id: 'capsule-change-windows-details',
+                section: (
+                  <WindowSections
+                    key={`${cluster}/${item.metadata.uid}`}
+                    item={item}
+                    cluster={cluster}
+                  />
+                ),
+              },
+            ]
+          : []
+      }
+    />
+  );
+}
+
+function WindowSections({ item, cluster }: { item: ChangeWindow; cluster: string }) {
   const actions = useMemo(() => (item ? [item.jsonData] : []), [item]);
   const now = useNow();
   const projections = useCurrentProjections(actions, now);
-  if (error) return <LoadError error={error} />;
-  if (!item) return <CircularProgress aria-label="Loading action" />;
   const action = item.jsonData;
   const projection = projections[0];
   const active = currentWindow(projection.windows, now);
   return (
-    <Box sx={{ p: 2 }}>
-      <Link routeName={ROUTE} activeCluster={cluster}>
-        Change Windows
-      </Link>
-      <Typography variant="h4" sx={{ my: 2 }}>
-        {action.metadata.name}
-      </Typography>
+    <Box sx={{ minWidth: 0, width: '100%' }}>
       <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
         <Chip
           label={projection.error ? 'Window unknown' : active ? 'Active window' : 'Outside window'}
           color={active ? 'warning' : 'default'}
         />
-        <Chip label={readyStatus(action)} />
-        <Chip label={`${action.status?.pendingResources || 0} pending resources`} />
       </Stack>
       {projection.error && <Alert severity="warning">{projection.error}</Alert>}
       {active && (
@@ -65,12 +100,20 @@ function ClusterDetails({ cluster }: { cluster: string }) {
         </Alert>
       )}
       {action.status?.conditions
-        ?.filter(condition => condition.status !== 'True')
+        ?.filter(condition =>
+          condition.type === 'Active' ? condition.status === 'Unknown' : condition.status !== 'True'
+        )
         .map(condition => (
           <Alert key={condition.type} severity="warning" sx={{ mb: 1 }}>
             {condition.type}: {condition.message || condition.reason}
           </Alert>
         ))}
+      <SectionBox title="Conditions" role="region" aria-label="Conditions">
+        <Resource.ConditionsTable resource={item.jsonData} showLastUpdate={false} />
+      </SectionBox>
+      <WindowEvents item={item} cluster={cluster} />
+      <NamespaceSelection action={action} cluster={cluster} />
+      <WindowCalendar actions={actions} now={now} renderAction={action => action.metadata.name} />
       <SectionBox title="Schedules">
         <Table aria-label="Action schedules">
           <TableHead>
@@ -94,11 +137,6 @@ function ClusterDetails({ cluster }: { cluster: string }) {
             ))}
           </TableBody>
         </Table>
-      </SectionBox>
-      <SectionBox title="Namespace selection">
-        <Box component="pre" sx={{ p: 2, overflowX: 'auto' }}>
-          {JSON.stringify(action.spec.namespaceSelectors, null, 2)}
-        </Box>
       </SectionBox>
       <SectionBox title="Targets">
         <Table aria-label="Resource targets">
@@ -159,11 +197,6 @@ function ClusterDetails({ cluster }: { cluster: string }) {
             </Box>
           ))}
         </Stack>
-      </SectionBox>
-      <SectionBox title="Resource definition">
-        <Box component="pre" sx={{ p: 2, overflowX: 'auto', fontSize: 13 }}>
-          {JSON.stringify(action, null, 2)}
-        </Box>
       </SectionBox>
     </Box>
   );

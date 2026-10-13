@@ -69,9 +69,9 @@ export function projectWindows(
     !Number.isFinite(from) ||
     !Number.isFinite(until) ||
     until <= from ||
-    until - from > 90 * DAY
+    until - from > 400 * DAY
   ) {
-    throw new Error('Calendar range must be positive and at most 90 days.');
+    throw new Error('Calendar range must be positive and at most 400 days.');
   }
   if (!schedules?.length || schedules.length > 16) throw new Error('Expected 1 to 16 schedules.');
   const names = new Set<string>();

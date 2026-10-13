@@ -4,10 +4,13 @@ This plugin adds a top-level **Change Windows** navigation entry for the Capsule
 Scheduled Action Controller. It is independent of the Capsule Headlamp plugin.
 Tested against Headlamp 0.45.0 with the pinned 0.14.0 plugin SDK.
 
-- Weekly calendar with previous/next/today navigation and local-time labels.
+- Compact weekly, monthly and yearly calendars on the overview and each
+  ChangeWindow detail page, with previous/next/today navigation.
+  Select a month or highlighted day in the yearly view to explore its windows.
 - Searchable table of all ChangeWindows, active windows, next transitions,
   controller readiness, target kinds, and pending restoration counts.
-- Detail pages for schedules, selectors, resource actions, admission and the CR.
+- Standard Headlamp detail pages with metadata first, conditions, events, matching
+  visible namespaces, schedules, resource actions, admission and View YAML.
 - A **Maintenance windows** section on namespaced resource detail pages. It
   matches direct GVK/label targets and follows supported controlling workload
   owners, including Pod → ReplicaSet → Deployment.
@@ -70,13 +73,23 @@ protection must permit the release job's `GITHUB_TOKEN` to push to that branch.
 
 Select one cluster to open the overview or an action. Requests use Headlamp's
 authenticated user and explicit cluster context. The
-plugin never reads journal Secrets or writes workloads. The optional
-[`viewer-role.yaml`](deploy/viewer-role.yaml) lists its additional read permissions;
-review and bind it to the intended users/groups. It includes cluster-scoped
-ChangeWindow list/watch/get, namespace get, and keyed reads of supported
-workload owners. The user's normal Headlamp permissions still govern Pod and
-other resource detail pages. In restricted environments, grant parent-resource
-reads using namespace-scoped Roles instead of the sample's cluster-wide grants.
+plugin never reads journal Secrets or writes workloads. Viewers need ChangeWindow
+get/list/watch, namespace get for maintenance matching, and namespace list/watch
+for the selection table. Events require list access to core/v1 Events across
+namespaces because ChangeWindows are cluster-scoped. Event requests filter by
+resource UID, refresh every 30 seconds and show at most 2,000 entries. Permission
+errors are shown in their section without hiding the remaining details.
+
+The namespace table contains only namespaces returned to the signed-in user in
+the selected cluster that satisfy the window's selectors. It follows label and
+selector updates, excludes protected namespaces, and links to namespace details.
+Node-only windows do not request a namespace list. An empty successful list is
+shown separately from loading or permission errors. This describes current
+selection, not the controller's recorded action participants.
+
+The user's normal Headlamp permissions govern resource detail pages and keyed
+reads of workload owners. Grant parent-resource reads using namespace-scoped
+Roles where appropriate; the plugin does not grant or expand permissions.
 
 Namespace selectors are ORed; labels within each selector use Kubernetes AND
 semantics, including `NotIn` on absent labels. Namespace identity and target GVK
@@ -100,13 +113,20 @@ occurrences. Active state uses the browser clock, independent of delayed status;
 controller readiness is displayed separately. Check clock synchronization when
 comparing the preview with admission decisions.
 
-Schedules are projected over bounded ranges with a 14-day margin. A transition
+The detail calendar previews only the selected ChangeWindow. Weekly and monthly
+views use a continuous grid with compact entries; on narrow screens the week
+becomes a list of days and the month scrolls horizontally.
+Schedules are projected over the selected week, month or year with a 14-day margin.
+Projection is bounded to 400 days, including leap years and margins. Monthly cells
+show up to three entries and link to the week for more detail; the yearly view
+highlights days with windows without rendering every event. A transition
 beyond the current preview is labelled accordingly. At most 250 matching actions
 and 10,000 intervals per action are expanded; dense or invalid projections show an
 explicit warning/unknown state. The table is paginated in groups of 50 and still
 includes all actions. Filter by action name or kind to narrow the preview.
 Continuous minutely schedules are collapsed into a single interval. Projection
-results are memoized across clock ticks; resource detail pages first filter
+work yields between batches and is cancelled when you navigate or filter. Results
+are retained across clock ticks; resource detail pages first filter
 policies by their namespace and target scope.
 
 The view shows current selection, not durable participation or completed patches.

@@ -5,6 +5,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -73,6 +74,48 @@ func TestAPI(t *testing.T) {
 		}
 	})
 	ctx := t.Context()
+	t.Run("status conditions and kubectl table", func(t *testing.T) {
+		window := testutil.Action()
+		window.ObjectMeta = metav1.ObjectMeta{Name: "status-table"}
+		if err := c.Create(ctx, window); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+		r := &ChangeWindowReconciler{Client: c, Reader: c, Scheme: scheme, Mapper: mapper, Now: func() time.Time { return now }}
+		for _, state := range []string{api.ReasonPlanned, api.ReasonActive, api.ReasonFinished} {
+			if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(window)}); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(window), window); err != nil {
+				t.Fatal(err)
+			}
+			active := metav1.ConditionFalse
+			if state == api.ReasonActive {
+				active = metav1.ConditionTrue
+			}
+			assertConditions(t, window, metav1.ConditionTrue, active, state)
+			raw, err := disc.RESTClient().Get().AbsPath("/apis/"+api.GroupVersion.String()+"/changewindows/"+window.Name).
+				SetHeader("Accept", "application/json;as=Table;g=meta.k8s.io;v=v1").DoRaw(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			table := &metav1.Table{}
+			if err := json.Unmarshal(raw, table); err != nil {
+				t.Fatal(err)
+			}
+			if len(table.Rows) != 1 {
+				t.Fatalf("expected one row: %s", raw)
+			}
+			cells := map[string]any{}
+			for i, column := range table.ColumnDefinitions {
+				cells[column.Name] = table.Rows[0].Cells[i]
+			}
+			if cells["Ready"] != "True" || cells["State"] != state || cells["Active"] != string(active) || cells["Next Transition"] != window.Status.NextTransition.UTC().Format(time.RFC3339) {
+				t.Fatalf("incorrect kubectl columns: %s", raw)
+			}
+			now = now.Add(time.Hour)
+		}
+	})
 	t.Run("GVK pattern schema", func(t *testing.T) {
 		for _, version := range []string{"", "*", "apps", "apps/*", "*.example.com/v1*"} {
 			obj := testutil.Action()

@@ -101,7 +101,7 @@ func TestAfterHoursExample(t *testing.T) {
 		if err := admin.Get(ctx, client.ObjectKeyFromObject(stateful), stateful); err != nil {
 			return false, err
 		}
-		return fresh.Status.Active && fresh.Status.ObservedGeneration == fresh.Generation && meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionReady) && *dep.Spec.Replicas == 0 && *stateful.Spec.Replicas == 0, nil
+		return meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionActive) && fresh.Status.Active && fresh.Status.ObservedGeneration == fresh.Generation && meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionReady) && *dep.Spec.Replicas == 0 && *stateful.Spec.Replicas == 0, nil
 	})
 	assertReplicas(t, admin, zero, 0)
 	assertReplicas(t, admin, other, 1)
@@ -116,7 +116,8 @@ func TestAfterHoursExample(t *testing.T) {
 		if err := admin.Get(ctx, client.ObjectKeyFromObject(stateful), stateful); err != nil {
 			return false, err
 		}
-		return !fresh.Status.Active && fresh.Status.PendingResources == 0 && *dep.Spec.Replicas == 2 && *stateful.Spec.Replicas == 3, nil
+		condition := meta.FindStatusCondition(fresh.Status.Conditions, api.ConditionActive)
+		return condition != nil && condition.Reason == api.ReasonFinished && condition.ObservedGeneration == fresh.Generation && meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionReady) && !fresh.Status.Active && fresh.Status.PendingResources == 0 && *dep.Spec.Replicas == 2 && *stateful.Spec.Replicas == 3, nil
 	})
 	assertReplicas(t, admin, zero, 0)
 	assertReplicas(t, admin, other, 1)

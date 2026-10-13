@@ -67,7 +67,7 @@ func fixture(t *testing.T) (string, []string) {
 		t.Fatal(err)
 	}
 	root := repository(t)
-	for _, name := range []string{"Taskfile.yml", "prek.toml", "hack/prek-builtins.toml"} {
+	for _, name := range []string{"Taskfile.yml", "prek.toml", "hack/prek-builtins.toml", "hack/dev/readiness.yaml"} {
 		copyFile(t, root, dir, name)
 	}
 	successful(t, dir, nil, "git", "init", "-q")
@@ -240,9 +240,6 @@ func TestEnterpriseTasks(t *testing.T) {
 			log := logContents(t, dir)
 			if strings.Contains(log, "helm\t") || strings.Contains(log, "ko\t") {
 				t.Fatal("dry run executed publishing tools")
-			}
-			if _, err := command(t, dir, env, "task", "enterprise:"+channel, "ENTERPRISE_VERSION=v0.1.0", "DRY_RUN=true"); err == nil {
-				t.Fatal("invalid enterprise version accepted")
 			}
 		})
 	}

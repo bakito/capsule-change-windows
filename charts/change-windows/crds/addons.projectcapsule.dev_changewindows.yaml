@@ -20,9 +20,20 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
-    - jsonPath: .status.active
+    - jsonPath: .status.conditions[?(@.type=='Active')].reason
+      name: State
+      type: string
+    - jsonPath: .status.nextTransition
+      name: Next Transition
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Active')].status
       name: Active
-      type: boolean
+      priority: 1
+      type: string
+    - jsonPath: .status.pendingResources
+      name: Pending
+      priority: 1
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -640,8 +651,16 @@ spec:
           status:
             properties:
               active:
+                description: Active mirrors the Active condition for compatibility.
+                  Conditions distinguish unknown state.
                 type: boolean
               conditions:
+                description: |-
+                  Conditions report reconciliation readiness (Ready) and schedule occupancy (Active).
+                  Active reasons are Planned before the first observed window, Active during a window,
+                  Finishing while restoration is outstanding, and Finished after an observed window completes.
+                  Finished persists until another window starts. Unknown denotes invalid policy;
+                  Unscheduled means no occurrence is available and none has been observed.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -701,6 +720,8 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               nextTransition:
+                description: NextTransition is the active window's end or the next
+                  planned start, including after Finished.
                 format: date-time
                 type: string
               observedGeneration:

@@ -1,0 +1,23 @@
+apiVersion: addons.projectcapsule.dev/v1alpha1
+kind: ChangeWindow
+metadata:
+  generateName: dev-readiness-
+spec:
+  namespaceSelectors:
+    - matchLabels:
+        change-windows.dev/readiness: probe
+  schedules:
+    - name: probe
+      cron: '0 0 * * *'
+      duration: 1m
+  targets:
+    - name: configs
+      apiVersion: v1
+      kind: ConfigMap
+  admission:
+    - name: probe
+      targets: [configs]
+      operations: [UPDATE]
+      when: Active
+      action: Deny
+      message: Readiness probe

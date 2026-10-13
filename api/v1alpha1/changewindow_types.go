@@ -3,9 +3,21 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	capmeta "github.com/projectcapsule/capsule/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
-const ConditionReady = "Ready"
+const (
+	ConditionReady    = capmeta.ReadyCondition
+	ConditionActive   = "Active"
+	ReasonPlanned     = "Planned"
+	ReasonActive      = capmeta.ActiveReason
+	ReasonFinished    = "Finished"
+	ReasonFinishing   = "Finishing"
+	ReasonUnscheduled = "Unscheduled"
+	ReasonUnknown     = "Unknown"
+)
 
 // ChangeWindowSpec selects namespaces and resources for scheduled behavior.
 // +kubebuilder:validation:XValidation:rule="!has(self.actions) || size(self.actions) == 0 || has(self.serviceAccount)",message="actions require a serviceAccount"
@@ -239,6 +251,7 @@ type AdmissionWarning struct {
 type ChangeWindowStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// Active mirrors the Active condition for compatibility. Conditions distinguish unknown state.
 	// +optional
 	Active bool `json:"active,omitempty"`
 	// +optional
@@ -246,11 +259,17 @@ type ChangeWindowStatus struct {
 	// WindowEnd is absent when the effective end is beyond the bounded scheduling horizon.
 	// +optional
 	WindowEnd *metav1.Time `json:"windowEnd,omitempty"`
+	// NextTransition is the active window's end or the next planned start, including after Finished.
 	// +optional
 	NextTransition *metav1.Time `json:"nextTransition,omitempty"`
 	// PendingResources counts journal entries still requiring completion.
 	// +optional
 	PendingResources int32 `json:"pendingResources,omitempty"`
+	// Conditions report reconciliation readiness (Ready) and schedule occupancy (Active).
+	// Active reasons are Planned before the first observed window, Active during a window,
+	// Finishing while restoration is outstanding, and Finished after an observed window completes.
+	// Finished persists until another window starts. Unknown denotes invalid policy;
+	// Unscheduled means no occurrence is available and none has been observed.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -261,7 +280,10 @@ type ChangeWindowStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName=cw
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
-// +kubebuilder:printcolumn:name="Active",type=boolean,JSONPath=".status.active"
+// +kubebuilder:printcolumn:name="State",type=string,JSONPath=".status.conditions[?(@.type=='Active')].reason"
+// +kubebuilder:printcolumn:name="Next Transition",type=string,JSONPath=".status.nextTransition"
+// +kubebuilder:printcolumn:name="Active",type=string,JSONPath=".status.conditions[?(@.type=='Active')].status",priority=1
+// +kubebuilder:printcolumn:name="Pending",type=integer,JSONPath=".status.pendingResources",priority=1
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
 // ChangeWindow describes scheduled resource changes and admission restrictions.

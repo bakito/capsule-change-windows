@@ -90,8 +90,8 @@ devbox run -- task dev:deploy DEV_CONTEXT=kind-my-dev DEV_KIND_CLUSTER=my-dev
 Run these commands from the repository root. For repeated commands, enter
 `devbox shell` once and use `task dev:deploy` inside it. A bare `task` outside
 Devbox does not load the pinned tools: errors such as a missing `controller-gen`
-mean the development environment is not active. The task checks its required
-tools before generating code, building an image, or accessing the cluster.
+mean the development environment is not active. Task uses the tools on PATH;
+Devbox owns their versions, and command failures stop dependent steps.
 
 Kind is the default `DEV_IMAGE_MODE`. The task verifies that the selected context
 points to that Kind cluster, builds for its node architecture, and uses a fresh
@@ -270,7 +270,9 @@ CI installs Chromium with its system dependencies and runs the same tests.
 Production output is in `dist/docs/`. The Documentation workflow checks the site
 and uploads a preview artifact for pull requests. Every push to `main` also
 deploys the checked site to GitHub Pages; it can be rerun manually on `main`.
-Builds use the base URL returned by Pages, including a configured custom domain.
+Builds use the canonical HTTPS URL from `Taskfile.yml`. Keep it and the custom
+domain in `docs/hugo.toml` aligned; an HTTP base URL causes browsers to block
+the navigation and search scripts as mixed content.
 
 In the repository settings, select **Pages → Build and deployment → Source →
 GitHub Actions** once. The workflow uses the built-in token and the `github-pages`
@@ -304,8 +306,8 @@ GitHub Pages hosts the site; Netlify manages its DNS.
 
 The CNAME value is a hostname, without `https://` or a repository path.
 A `CNAME` file in the generated site is unnecessary for an Actions-based Pages
-workflow. Hugo and Task default to the production URL, and CI uses the URL returned
-by Configure Pages. Netlify does not need a build or hosting configuration.
+workflow. Hugo, Task and CI use the HTTPS production URL. Netlify does not need a
+build or hosting configuration.
 
 See [GitHub's custom domain setup](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-domains/dns-records/).
@@ -315,9 +317,9 @@ and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-doma
 If `hugo version` reports an older Homebrew/system binary, use
 `devbox run -- task docs:serve`. Devbox requires Nix. Alternatively, install
 Hugo Extended 0.166.0 or newer and Node 24 and put them first on `PATH`.
-Documentation tasks reject unsupported Hugo versions before generating or
-building files. Use the Task commands to expose the local Sass compiler on
-`PATH`; installing the theme does not replace your system Hugo.
+Task delegates compatibility checks to Hugo and the theme. Use the Task commands
+to expose the local Sass compiler on `PATH`; installing the theme does not replace
+your system Hugo.
 
 ## Develop the Headlamp plugin
 
@@ -374,7 +376,8 @@ task enterprise:release ENTERPRISE_VERSION=0.1.0 DRY_RUN=true
 Enterprise release tasks publish images and Helm charts when `DRY_RUN` is omitted.
 Review the preview and authenticate to the intended registry before intentional
 publication. Versions use SemVer without a `v` prefix or build metadata. Release
-tasks also print deployment instructions. Pull-request checks do not publish releases.
+tasks validate and package the chart before publishing an image, and print
+deployment instructions. Pull-request checks do not publish releases.
 
 ### Provenance and Scorecard setup
 

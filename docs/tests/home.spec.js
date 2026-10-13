@@ -106,11 +106,13 @@ test('without JavaScript the YAML links and download remain available', async ({
   await context.close();
 });
 
-test('search resolves examples beneath the project base URL', async ({ page }) => {
+test('search resolves examples beneath the project base URL', async ({ page, isMobile }) => {
   const index = page.waitForResponse(response => response.url().endsWith('/schedule-actions/search-index.json'));
   await page.goto('');
   expect((await index).ok()).toBeTruthy();
-  await page.getByRole('button', { name: 'Search website', exact: true }).click();
+  const search = page.getByRole('button', { name: 'Search website', exact: true });
+  if (isMobile) await search.tap();
+  else await search.click();
   await page.locator('.search-text').fill('node pool');
   await page.locator('.search-results').getByRole('link', { name: /Freeze a node pool/ }).click();
   await expect(page).toHaveURL(/\/schedule-actions\/docs\/examples\/node-pool\/$/);
@@ -126,13 +128,13 @@ for (const searchLoads of [true, false]) {
     const toggle = page.getByRole('button', { name: 'Open main navigation menu', exact: true });
     if (isMobile) {
       await expect(main).toBeHidden();
-      await toggle.click();
+      await toggle.tap();
       await expect(main).toBeVisible();
       await expect(page.locator('.offcanvas-backdrop')).toHaveCount(1);
-      await main.getByRole('button', { name: 'Close', exact: true }).click();
+      await main.getByRole('button', { name: 'Close', exact: true }).tap();
       await expect(main).toBeHidden();
       await expect(page.locator('.offcanvas-backdrop')).toHaveCount(0);
-      await toggle.click();
+      await toggle.tap();
     } else {
       await expect(toggle).toBeHidden();
       await expect(main).toBeVisible();
@@ -142,11 +144,11 @@ for (const searchLoads of [true, false]) {
     if (isMobile) {
       const section = page.locator('#offcanvasNavSection');
       await expect(section).toBeHidden();
-      await page.getByRole('button', { name: 'Open section navigation menu', exact: true }).click();
+      await page.getByRole('button', { name: 'Open section navigation menu', exact: true }).tap();
       await expect(section).toBeVisible();
-      await section.getByRole('button', { name: 'Close', exact: true }).click();
+      await section.getByRole('button', { name: 'Close', exact: true }).tap();
       await expect(section).toBeHidden();
-      await page.getByRole('button', { name: 'Open section navigation menu', exact: true }).click();
+      await page.getByRole('button', { name: 'Open section navigation menu', exact: true }).tap();
       await section.getByRole('link', { name: 'Installation', exact: true }).click();
       await expect(page).toHaveURL(/\/schedule-actions\/docs\/getting-started\/installation\/$/);
     }
