@@ -8,23 +8,9 @@ Helm is the only supported installation method. Install
 webhook and metrics certificates. You need cluster administrator permissions to
 install CRDs, admission webhooks, and controller RBAC.
 
-Build an image from the checkout and make it available to the cluster. These
-commands use ko through [Devbox](https://www.jetify.com/docs/devbox/installing-devbox/)
-and do not require a container daemon. Replace the example registry with your own.
-
-```shell
-git clone https://github.com/projectcapsule/schedule-action-controller.git
-cd schedule-action-controller
-devbox shell
-task image:push IMG=registry.example.com/scheduled-action:dev
-```
-
-`image:push` builds and publishes Linux amd64/arm64 images. For a local archive
-without publishing, use `task image:build IMG=registry.example.com/scheduled-action:dev`;
-the archive is written to `dist/controller.tar` and must be loaded into your
-cluster separately.
-
 ## Install with Helm
+
+[![Helm Chart](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/change-windows)](https://artifacthub.io/packages/search?repo=change-windows)
 
 ```shell
 helm upgrade --install scheduled-action charts/change-windows \

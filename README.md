@@ -1,3 +1,8 @@
+
+[![Helm Chart](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/change-windows)](https://artifacthub.io/packages/search?repo=change-windows)
+
+[![Headlamp Plugin](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/change-windows-headlamp)](https://artifacthub.io/packages/search?repo=change-windows-headlamp)
+
 # Change Windows
 
 Scheduled maintenance and resource automation for Kubernetes.

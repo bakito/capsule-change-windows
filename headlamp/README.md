@@ -1,5 +1,19 @@
 # Change Windows for Headlamp
 
+Installation is supported via Plugin Manager for Headlamp.
+
+```yaml
+  enabled: true
+  configContent: |
+    plugins:
+      - name: change-windows
+        source: https://artifacthub.io/packages/headlamp/change-windows-headlamp/change-windows
+        version: 0.1.0
+    installOptions:
+      parallel: true
+      maxConcurrent: 2
+```
+
 This plugin adds a top-level **Change Windows** navigation entry for the Capsule
 Scheduled Action Controller. It is independent of the Capsule Headlamp plugin.
 Tested against Headlamp 0.45.0 with the pinned 0.14.0 plugin SDK.
