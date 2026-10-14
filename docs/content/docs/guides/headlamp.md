@@ -42,38 +42,21 @@ action snapshot. Journal Secrets are never read by the plugin.
 
 ## Build and install the plugin
 
-```shell
-devbox shell
-task headlamp:install
-task headlamp:check
-task headlamp:package
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/change-windows-headlamp)](https://artifacthub.io/packages/search?repo=change-windows-headlamp)
+
+Installation is supported via Plugin Manager for Headlamp.
+
+```yaml
+  enabled: true
+  configContent: |
+    plugins:
+      - name: capsule
+        source: https://artifacthub.io/packages/headlamp/change-windows-headlamp/change-windows
+        version: 0.1.0
+    installOptions:
+      parallel: true
+      maxConcurrent: 2
 ```
-
-The source is under `headlamp/`. The SDK produces a bundle in `headlamp/dist/` and
-a local archive when packaging. Install it as `capsule-change-windows` using your
-[Headlamp plugin distribution method](https://headlamp.dev/docs/latest/development/plugins/building/).
-It is tested against Headlamp 0.45.0. The controller and CRD are separate
-prerequisites; this UI does not install them.
-
-Grant viewers get/list/watch access to ChangeWindows, get access to namespaces
-for maintenance matching, and list/watch access to namespaces for the selection
-table. The table shows matching namespaces returned to the signed-in user in the
-selected cluster, with protected namespaces excluded. It follows current labels;
-it does not claim that these namespaces participated in an earlier action.
-Node-only windows do not list namespaces.
-
-Events require list access to core/v1 Events across namespaces, since ChangeWindows
-are cluster-scoped. Requests select the current resource UID so events from a
-deleted object with the same name are excluded. Events refresh every 30 seconds
-and are limited to 2,000 entries. Missing namespace or event permissions produce
-an explicit message in that section; the rest of the detail page remains usable.
-
-Parent workload reads are needed for owner matching; narrow those permissions to
-individual namespaces where appropriate. The plugin uses Headlamp's existing
-login and never needs a new administrator credential.
-
-When using a custom controller namespace, configure it per Headlamp cluster in
-the plugin settings so that infrastructure namespace remains excluded.
 
 ## Releases
 
