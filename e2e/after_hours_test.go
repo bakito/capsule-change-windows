@@ -39,7 +39,7 @@ func TestAfterHoursExample(t *testing.T) {
 		}
 		createMatching(t, admin, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, Labels: labels}})
 	}
-	data, err := os.ReadFile("../examples/after-hours-executor-rbac.yaml")
+	data, err := os.ReadFile("../playground/manifests/examples/after-hours-executor-rbac.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestAfterHoursExample(t *testing.T) {
 	createMatching(t, admin, other)
 	stateful := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "all-statefulsets", Namespace: "after-hours"}, Spec: appsv1.StatefulSetSpec{ServiceName: "example", Replicas: ptr.To(int32(3)), Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "stateful"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "stateful"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "pause", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	createMatching(t, admin, stateful)
-	data, err = os.ReadFile("../examples/after-hours.yaml")
+	data, err = os.ReadFile("../playground/manifests/examples/after-hours.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,12 +5,15 @@ package policy
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/yaml"
 
 	api "github.com/projectcapsule/schedule-action-controller/api/v1alpha1"
 	"github.com/projectcapsule/schedule-action-controller/internal/testutil"
@@ -133,5 +136,41 @@ func TestRenderLimits(t *testing.T) {
 	tmpl, _ = Parse("0123456789")
 	if _, err := Render(tmpl, nil, 5); err == nil {
 		t.Fatal("output limit ignored")
+	}
+}
+
+func TestChangeWindowExamples(t *testing.T) {
+	files, err := filepath.Glob("../../playground/manifests/examples/*.yaml")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no examples found: %v", err)
+	}
+	count := 0
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var kind struct {
+			Kind string `json:"kind"`
+		}
+		if err := yaml.Unmarshal(data, &kind); err != nil {
+			t.Fatal(err)
+		}
+		if kind.Kind != "ChangeWindow" {
+			continue
+		}
+		count++
+		t.Run(filepath.Base(file), func(t *testing.T) {
+			var action api.ChangeWindow
+			if err := yaml.UnmarshalStrict(data, &action); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Compile(&action, testutil.Mapper()); err != nil {
+				t.Fatalf("documented example fails policy validation: %v", err)
+			}
+		})
+	}
+	if count == 0 {
+		t.Fatal("no ChangeWindow examples found")
 	}
 }

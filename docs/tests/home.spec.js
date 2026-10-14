@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-const source = await readFile(new URL('../../examples/quickstart.yaml', import.meta.url), 'utf8');
+const source = await readFile(new URL('../../playground/manifests/examples/quickstart.yaml', import.meta.url), 'utf8');
 
 const guides = {
   namespaceSelectors: 'schedules/',
@@ -71,7 +71,7 @@ test('explore YAML, copy the complete manifest, and follow matching references',
   expect(download.ok()).toBeTruthy();
   expect(await download.text()).toBe(source);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-  const reference = isMobile ? 'changewindowspec' : 'admissionwarning';
+  const reference = isMobile ? 'changewindowspecnamespaceselectorsindex' : 'changewindowspecconfigadmissionwarningsindex';
   await example.locator('[data-window-help]:visible').getByRole('link', { name: 'API reference' }).click();
   await expect(page).toHaveURL(new RegExp(`/schedule-actions/docs/reference/api/#${reference}$`));
   await expect(page.locator(`#${reference}`)).toBeVisible();
