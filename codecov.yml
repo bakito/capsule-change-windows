@@ -1,0 +1,5 @@
+ignore:
+  # controller-gen output; handwritten API code remains included.
+  - "**/zz_generated.*.go"
+  # Shared test fixtures are not part of the controller runtime.
+  - "internal/testutil/**"
