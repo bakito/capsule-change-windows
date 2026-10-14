@@ -1,0 +1,12 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+networking:
+  apiServerAddress: 127.0.0.1
+nodes:
+  - role: control-plane
+    extraMounts:
+      # Kind resolves this relative to its working directory. The playground task
+      # stages the current plugin in a private directory and creates Kind from there.
+      - hostPath: ./plugins
+        containerPath: /opt/change-windows-plugins
+        readOnly: true

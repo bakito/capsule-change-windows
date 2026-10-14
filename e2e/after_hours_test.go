@@ -39,7 +39,7 @@ func TestAfterHoursExample(t *testing.T) {
 		}
 		createMatching(t, admin, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, Labels: labels}})
 	}
-	data, err := os.ReadFile("../examples/after-hours-executor-rbac.yaml")
+	data, err := os.ReadFile("../playground/manifests/examples/after-hours-executor-rbac.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestAfterHoursExample(t *testing.T) {
 	createMatching(t, admin, other)
 	stateful := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "all-statefulsets", Namespace: "after-hours"}, Spec: appsv1.StatefulSetSpec{ServiceName: "example", Replicas: ptr.To(int32(3)), Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "stateful"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "stateful"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "pause", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	createMatching(t, admin, stateful)
-	data, err = os.ReadFile("../examples/after-hours.yaml")
+	data, err = os.ReadFile("../playground/manifests/examples/after-hours.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestAfterHoursExample(t *testing.T) {
 		if err := admin.Get(ctx, client.ObjectKeyFromObject(stateful), stateful); err != nil {
 			return false, err
 		}
-		return fresh.Status.Active && fresh.Status.ObservedGeneration == fresh.Generation && meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionReady) && *dep.Spec.Replicas == 0 && *stateful.Spec.Replicas == 0, nil
+		return meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionActive) && fresh.Status.Active && fresh.Status.ObservedGeneration == fresh.Generation && meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionReady) && *dep.Spec.Replicas == 0 && *stateful.Spec.Replicas == 0, nil
 	})
 	assertReplicas(t, admin, zero, 0)
 	assertReplicas(t, admin, other, 1)
@@ -116,7 +116,8 @@ func TestAfterHoursExample(t *testing.T) {
 		if err := admin.Get(ctx, client.ObjectKeyFromObject(stateful), stateful); err != nil {
 			return false, err
 		}
-		return !fresh.Status.Active && fresh.Status.PendingResources == 0 && *dep.Spec.Replicas == 2 && *stateful.Spec.Replicas == 3, nil
+		condition := meta.FindStatusCondition(fresh.Status.Conditions, api.ConditionActive)
+		return condition != nil && condition.Reason == api.ReasonFinished && condition.ObservedGeneration == fresh.Generation && meta.IsStatusConditionTrue(fresh.Status.Conditions, api.ConditionReady) && !fresh.Status.Active && fresh.Status.PendingResources == 0 && *dep.Spec.Replicas == 2 && *stateful.Spec.Replicas == 3, nil
 	})
 	assertReplicas(t, admin, zero, 0)
 	assertReplicas(t, admin, other, 1)

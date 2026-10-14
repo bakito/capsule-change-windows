@@ -4,6 +4,18 @@ default_stages = ["pre-commit"]
 exclude = '^(\.devbox/|\.task/|bin/|dist/|artifacts/|builds/)'
 
 [[repos]]
+repo = "builtin"
+hooks = [
+  { id = "check-executables-have-shebangs", groups = ["files"], priority = 10 },
+  { id = "end-of-file-fixer", args = ["--check"], groups = ["files"], priority = 10 },
+  { id = "trailing-whitespace", args = ["--check"], groups = ["files"], priority = 10 },
+  { id = "check-merge-conflict", groups = ["files"], priority = 10 },
+  { id = "check-json", groups = ["files"], priority = 10 },
+  { id = "check-toml", groups = ["files"], priority = 10 },
+  { id = "check-yaml", args = ["--allow-multiple-documents"], exclude = '^charts/[^/]+/templates/', groups = ["files"], priority = 10 },
+]
+
+[[repos]]
 repo = "local"
 
 [[repos.hooks]]
@@ -11,7 +23,7 @@ id = "generated"
 name = "Generate API code and manifests"
 entry = "devbox run -- task generate manifests"
 language = "system"
-files = '^(api/|internal/|go\.(mod|sum)$|hack/boilerplate.go.txt$)'
+files = '^(api/|internal/|go\.(mod|sum)$)'
 pass_filenames = false
 require_serial = true
 priority = 0
@@ -53,20 +65,11 @@ pass_filenames = false
 priority = 20
 
 [[repos.hooks]]
-id = "shellcheck"
-name = "Check inline Task shell commands"
-entry = "devbox run -- task lint:shell"
-language = "system"
-files = '^(Taskfile\.yml|hack/tooling/.*\.go)$'
-pass_filenames = false
-priority = 20
-
-[[repos.hooks]]
 id = "docs"
 name = "Validate documentation and generated API reference"
 entry = "devbox run -- task docs:check"
 language = "system"
-files = '^(docs/|api/|examples/|hack/docs/|Taskfile\.yml$|hack/tools/)'
+files = '^(docs/|api/|playground/manifests/|charts/change-windows/crds/|Taskfile\.yml$|devbox\.(json|lock)$)'
 pass_filenames = false
 priority = 40
 
@@ -76,11 +79,4 @@ name = "Check Conventional Commit message"
 entry = "devbox run -- task lint:commit-message --"
 language = "system"
 stages = ["commit-msg"]
-priority = 10
-
-[[repos.hooks]]
-id = "files"
-name = "Check file hygiene and syntax"
-entry = "devbox run -- task lint:files --"
-language = "system"
 priority = 10

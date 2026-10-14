@@ -20,13 +20,16 @@ Xcode Command Line Tools for Go's race detector. ko builds container images with
 a daemon. Docker or another compatible engine is a separate prerequisite for Kind
 tests.
 
-Task implementations live directly in `Taskfile.yml`. Every prek hook calls a
-Task target through `devbox run -- task`, including file checks, YAML formatting,
-and commit-message validation. `task lint:shell` checks inline Task commands with
-ShellCheck. The native checks use a separate builtin-only prek configuration to
-avoid calling the Task hooks recursively. No Python environment is required.
+Task implementations live directly in `Taskfile.yml`. Prefer predefined prek
+hooks: native file checks live in `prek.toml`; project-specific hooks call existing
+Task targets through `devbox run -- task`. `task lint:files` selects the builtin
+`files` group without recursively invoking Task hooks. No Python is required.
 `task hooks:install` replaces legacy pre-commit shims. Use
-`devbox run -- task COMMAND` to run any target without an interactive shell.
+`devbox run -- task COMMAND` to run a target without an interactive shell.
+
+Use native validators and dry runs for tooling changes. Keep tests beside the
+product code or in its existing browser/integration suite; avoid loose Go/JS
+harnesses for configuration text, dependency versions, or repository layout.
 
 ## Run the controller on your host
 
@@ -90,8 +93,8 @@ devbox run -- task dev:deploy DEV_CONTEXT=kind-my-dev DEV_KIND_CLUSTER=my-dev
 Run these commands from the repository root. For repeated commands, enter
 `devbox shell` once and use `task dev:deploy` inside it. A bare `task` outside
 Devbox does not load the pinned tools: errors such as a missing `controller-gen`
-mean the development environment is not active. The task checks its required
-tools before generating code, building an image, or accessing the cluster.
+mean the development environment is not active. Task uses the tools on PATH;
+Devbox owns their versions, and command failures stop dependent steps.
 
 Kind is the default `DEV_IMAGE_MODE`. The task verifies that the selected context
 points to that Kind cluster, builds for its node architecture, and uses a fresh
@@ -142,8 +145,9 @@ helm --kube-context my-dev uninstall change-windows --namespace change-windows-s
 | `internal/metrics/` | Bounded-label Prometheus metrics. |
 | `cmd/main.go` | Manager, discovery, dependencies, TLS, and registration. |
 | `charts/` | Helm chart and generated CRDs/RBAC. |
-| `examples/` | Executable ChangeWindow and executor RBAC examples. |
-| `e2e/`, `hack/` | Isolated Kind tests and development/release helpers. |
+| `playground/manifests/examples/` | Executable ChangeWindow and executor RBAC examples. |
+| `e2e/` | Isolated Kind integration tests. |
+| `playground/` | Kind configuration, Flux installation, and demo/example manifests. |
 | `docs/` | Hugo site, pinned Doks npm dependencies, guides, and generated API reference. |
 | `headlamp/` | Headlamp plugin, schedule previews, selection helpers, and UI/browser tests. |
 
@@ -177,8 +181,7 @@ build files during API changes; retain Task as the maintained workflow.
 ```shell
 task test:unit
 task test
-task test:tooling
-task lint lint:yaml lint:actions lint:shell helm:lint
+task lint lint:yaml lint:actions helm:lint
 task e2e IMG=ghcr.io/projectcapsule/change-windows:e2e \
   KIND_CLUSTER=scheduled-action-dev
 ```
@@ -186,9 +189,8 @@ task e2e IMG=ghcr.io/projectcapsule/change-windows:e2e \
 `test:unit` excludes the real API-server suite. `test` runs unit and envtest
 integration tests with the race detector; setup-envtest obtains the pinned API
 server assets. Set `KUBEBUILDER_ASSETS` to an existing directory to reuse them.
-`test:tooling` verifies Task, hook, Helm, and release-command behavior without
-publishing or touching a cluster. `docs:check` checks generated-reference drift,
-example validity, and rendered links and assets.
+`docs:check` checks generated-reference drift and rendered links and assets.
+Executable examples are validated by the policy compiler unit tests.
 
 The e2e task creates a new isolated Kind cluster with a private kubeconfig,
 installs cert-manager, and runs `dev:deploy` twice to check Helm installation and
@@ -236,25 +238,31 @@ then run the documentation checks and inspect the rendered site.
 Edit weighted Markdown pages under `docs/content/docs/`. Group indexes define
 the sidebar. Use Hugo `relref` links between pages so navigation also works on
 project sites. The shared `example` shortcode and download mounts read directly
-from `examples/`; do not duplicate executable examples.
+from `playground/manifests/examples/`; do not duplicate executable examples.
 
-The homepage explorer renders `examples/quickstart.yaml` without changing
+The homepage explorer renders `playground/manifests/examples/quickstart.yaml` without changing
 its content. Annotations in `docs/data/window_example.yaml` connect each top-level
 spec block to its explanation, guide, and API type. Keep those links accurate as
-the API evolves. The static checks verify that copyable YAML and the download
+the API evolves. The browser tests verify that copyable YAML and the download
 exactly match the executable sample.
 
-`docs/content/docs/reference/api.md` is generated by the pinned `crd-ref-docs`
-Go tool in `hack/tools/`. Run `task docs:generate` after changing API types.
-The generator's dependencies stay outside the controller module. The empty
-`docs/go.mod` also prevents Go tools from traversing npm dependencies.
+`docs/content/docs/reference/api.md` is generated from the Helm CRDs by
+[crdoc](https://github.com/fybrik/crdoc). Run `task docs:generate` after changing API
+types; it refreshes chart manifests first. `docs/api-reference.yaml` supplies the
+title and API selection to crdoc's native frontmatter template.
 
-`task docs:check` checks generated-reference drift, validates examples, and
-builds root and project-site variants. It verifies every page's local links,
-anchors, assets, search index, and downloadable examples. For theme changes,
-also check search, code copying, dark mode, and mobile navigation in a browser.
-The Sass partial suppresses only known deprecations in Doks/Bootstrap; other
-build warnings still fail validation.
+crdoc is not currently indexed by Devbox. The Devbox initialization hook installs
+the pinned `fybrik.io/crdoc` CLI into `.devbox/crdoc/<version>/bin` on first use
+and adds it to PATH. Change `CRDOC_VERSION` in `devbox.json` to upgrade it. This
+needs no wrapper, extra Go module, or controller dependency. The empty
+`docs/go.mod` keeps npm dependencies outside controller Go tooling.
+
+`task docs:check` checks generated-reference drift, builds root and project-site
+variants, and uses lychee to check local links, fragments, and assets offline.
+External website availability does not affect this check. Policy unit tests
+validate the executable ChangeWindow examples. For theme changes, also run the
+browser tests for search, copying, dark mode, and mobile navigation. Known
+Doks/Bootstrap Sass deprecations are suppressed; other build warnings fail.
 
 For interactive documentation changes, install Chromium once and run the browser
 suite. It covers desktop/mobile, keyboard selection, copying, dark mode, and the
@@ -270,7 +278,9 @@ CI installs Chromium with its system dependencies and runs the same tests.
 Production output is in `dist/docs/`. The Documentation workflow checks the site
 and uploads a preview artifact for pull requests. Every push to `main` also
 deploys the checked site to GitHub Pages; it can be rerun manually on `main`.
-Builds use the base URL returned by Pages, including a configured custom domain.
+Builds use the canonical HTTPS URL from `Taskfile.yml`. Keep it and the custom
+domain in `docs/hugo.toml` aligned; an HTTP base URL causes browsers to block
+the navigation and search scripts as mixed content.
 
 In the repository settings, select **Pages → Build and deployment → Source →
 GitHub Actions** once. The workflow uses the built-in token and the `github-pages`
@@ -304,8 +314,8 @@ GitHub Pages hosts the site; Netlify manages its DNS.
 
 The CNAME value is a hostname, without `https://` or a repository path.
 A `CNAME` file in the generated site is unnecessary for an Actions-based Pages
-workflow. Hugo and Task default to the production URL, and CI uses the URL returned
-by Configure Pages. Netlify does not need a build or hosting configuration.
+workflow. Hugo, Task and CI use the HTTPS production URL. Netlify does not need a
+build or hosting configuration.
 
 See [GitHub's custom domain setup](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-domains/dns-records/).
@@ -315,9 +325,9 @@ and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-doma
 If `hugo version` reports an older Homebrew/system binary, use
 `devbox run -- task docs:serve`. Devbox requires Nix. Alternatively, install
 Hugo Extended 0.166.0 or newer and Node 24 and put them first on `PATH`.
-Documentation tasks reject unsupported Hugo versions before generating or
-building files. Use the Task commands to expose the local Sass compiler on
-`PATH`; installing the theme does not replace your system Hugo.
+Task delegates compatibility checks to Hugo and the theme. Use the Task commands
+to expose the local Sass compiler on `PATH`; installing the theme does not replace
+your system Hugo.
 
 ## Develop the Headlamp plugin
 
@@ -374,7 +384,8 @@ task enterprise:release ENTERPRISE_VERSION=0.1.0 DRY_RUN=true
 Enterprise release tasks publish images and Helm charts when `DRY_RUN` is omitted.
 Review the preview and authenticate to the intended registry before intentional
 publication. Versions use SemVer without a `v` prefix or build metadata. Release
-tasks also print deployment instructions. Pull-request checks do not publish releases.
+tasks validate and package the chart before publishing an image, and print
+deployment instructions. Pull-request checks do not publish releases.
 
 ### Provenance and Scorecard setup
 

@@ -5,8 +5,9 @@ weight: 20
 ---
 
 The playground builds the current checkout's operator with ko and its Headlamp
-plugin, then installs both with Headlamp in a new Kind cluster. It includes a
-demo workload and a ChangeWindow so you can explore the calendar, maintenance
+plugin, then installs both in a new Kind cluster. Flux manages Headlamp through
+a HelmRelease. A demo workload and ChangeWindow let you explore the calendar,
+maintenance
 rules and automatic downscaling. No registry publication or existing cluster is
 involved.
 
@@ -30,6 +31,34 @@ devbox run -- task playground PLAYGROUND_MINUTES=10 PLAYGROUND_PORT=18082
 `PLAYGROUND_MINUTES` accepts 1–30. `PLAYGROUND_PORT` selects a free localhost port;
 `PLAYGROUND_CLUSTER` selects a different **new** Kind cluster name. Dependencies
 use pinned versions; the operator and plugin come from the current working tree.
+
+## Configuration and manifests
+
+All playground inputs live under `playground/`:
+
+- `kind.config.yaml` declares the Kind node and read-only plugin mount. The task
+  stages the current plugin in a private directory and runs Kind from there, so
+  the relative `./plugins` mount works without generating configuration.
+- `installation/headlamp/` contains the Flux HelmRepository and HelmRelease.
+  The source and Helm controllers run in `flux-system`; Headlamp runs in
+  `kube-system`. Its chart version and values are declared in `release.flux.yaml`.
+- `installation/change-windows/values.yaml` configures the local operator's Helm
+  release, including admission selection for the `development` namespace.
+- `manifests/demo/` holds the demo resources and maintenance window.
+  `manifests/examples/` holds the individual documented examples, shared directly
+  with the documentation and tests. `manifests/dev/` holds the dry-run admission
+  probe used by development deployment.
+
+The task applies `playground/manifests/kustomization.yaml`, which selects only the
+runnable demo and its executor RBAC. Other examples are opt-in; do not recursively
+apply every sample because their schedules and policies may overlap.
+
+Preview the manifests without installing anything:
+
+```sh
+kubectl kustomize playground/installation/headlamp
+kubectl kustomize playground/manifests
+```
 
 ## Explore the demo
 

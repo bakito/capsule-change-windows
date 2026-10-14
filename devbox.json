@@ -22,12 +22,21 @@
     "bash": "5",
     "helm-docs": "1.14.2",
     "goreleaser": "2.17.1",
-    "openssl": "3.6.4"
+    "openssl": "3.6.4",
+    "lychee": "0.24.2",
+    "fluxcd": "2.9.6"
   },
   "env": {
-    "GOTOOLCHAIN": "local"
+    "GOTOOLCHAIN": "local",
+    "CRDOC_VERSION": "v0.6.4"
   },
   "nixpkgs": {
     "commit": "8edc0c72e3a38faf5434e40d1f19431125fe4b30"
+  },
+  "shell": {
+    "init_hook": [
+      "export PATH=\"$DEVBOX_PROJECT_ROOT/.devbox/crdoc/$CRDOC_VERSION/bin:$PATH\"",
+      "test -x \"$DEVBOX_PROJECT_ROOT/.devbox/crdoc/$CRDOC_VERSION/bin/crdoc\" || GOBIN=\"$DEVBOX_PROJECT_ROOT/.devbox/crdoc/$CRDOC_VERSION/bin\" go install \"fybrik.io/crdoc@$CRDOC_VERSION\""
+    ]
   }
 }

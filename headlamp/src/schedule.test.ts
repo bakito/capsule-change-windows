@@ -98,7 +98,7 @@ describe('controller-compatible schedule projections', () => {
       at([schedule('* * * * *', '1h', 'Mars/Olympus')], '2026-10-01T10:00:00Z')
     ).toThrow();
     expect(() => projectWindows([schedule('* * * * *', '1s')], 0, 20 * DAY)).toThrow(/too dense/);
-    expect(() => projectWindows([schedule('0 0 * * *')], 0, 100 * DAY)).toThrow(/90 days/);
+    expect(() => projectWindows([schedule('0 0 * * *')], 0, 401 * DAY)).toThrow(/400 days/);
     expect(() => projectWindows([], 0, DAY)).toThrow();
   });
 });

@@ -289,7 +289,7 @@ func TestNodePoolExample(t *testing.T) {
 	}
 	createMatching(t, admin, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "node-window-writer"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"nodes"}, ResourceNames: []string{"window-workers", "window-other"}, Verbs: []string{"get", "update", "patch", "delete"}}}})
 	createMatching(t, admin, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "node-window-writer"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "node-window-writer"}, Subjects: []rbacv1.Subject{{Kind: "User", Name: "node-operator", APIGroup: rbacv1.GroupName}, {Kind: "Group", Name: "platform-developers", APIGroup: rbacv1.GroupName}, {Kind: "User", Name: "unrelated-node-user", APIGroup: rbacv1.GroupName}, {Kind: "ServiceAccount", Namespace: "platform", Name: "deployer"}}})
-	data, err := os.ReadFile("../examples/node-pool-maintenance.yaml")
+	data, err := os.ReadFile("../playground/manifests/examples/node-pool-maintenance.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

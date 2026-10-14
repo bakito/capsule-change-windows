@@ -1,7 +1,9 @@
-processor:
-  ignoreTypes:
-    - ChangeWindowList$
-  ignoreFields:
-    - TypeMeta$
-render:
-  kubernetesVersion: '1.36'
+metadata:
+  title: API reference
+  weight: 10
+  description: Generated reference for the ChangeWindow Kubernetes API.
+groups:
+  - group: addons.projectcapsule.dev
+    version: v1alpha1
+    kinds:
+      - name: ChangeWindow

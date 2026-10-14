@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,25 +89,15 @@ func (r *ChangeWindowReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err == nil || !action.DeletionTimestamp.IsZero() {
 		pending, err = r.reconcileActions(ctx, action, c, w, now)
 	}
-	action.Status.ObservedGeneration = action.Generation
-	action.Status.Active = w.Active && action.DeletionTimestamp.IsZero()
-	action.Status.WindowStart = asTime(w.Start)
-	action.Status.WindowEnd = asTime(w.End)
+	updateStatus(action, w, now, pending, compileErr, err)
 	boundary := w.Start
 	if w.Active {
 		boundary = w.End
 	}
-	action.Status.NextTransition = asTime(boundary)
-	action.Status.PendingResources = pending
-	condition := metav1.Condition{Type: api.ConditionReady, Status: metav1.ConditionTrue, Reason: "Ready", Message: "Schedules and action state are reconciled.", ObservedGeneration: action.Generation}
 	if err != nil {
-		condition.Status = metav1.ConditionFalse
-		condition.Reason = "ReconcileError"
-		condition.Message = "Reconciliation failed; inspect controller logs and executor permissions."
 		ctrl.LoggerFrom(ctx).Error(err, "reconciling ChangeWindow", "name", action.Name)
 	}
-	meta.SetStatusCondition(&action.Status.Conditions, condition)
-	if !reflect.DeepEqual(before.Status, action.Status) && action.DeletionTimestamp.IsZero() {
+	if !apiequality.Semantic.DeepEqual(before.Status, action.Status) && (action.DeletionTimestamp.IsZero() || len(action.Finalizers) > 0) {
 		before.ResourceVersion = action.ResourceVersion
 		if patchErr := r.Status().Patch(ctx, action, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); patchErr != nil {
 			return ctrl.Result{}, patchErr

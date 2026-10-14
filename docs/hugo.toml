@@ -102,10 +102,10 @@ publishDir = '../dist/docs'
   target = "static"
 
 [[module.mounts]]
-source = "../examples"
+source = "../playground/manifests/examples"
 target = "assets/examples"
 [[module.mounts]]
-source = "../examples"
+source = "../playground/manifests/examples"
 target = "static/examples"
 [[module.mounts]]
 source = "../charts/change-windows/crds"

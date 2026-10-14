@@ -4,7 +4,15 @@ export function actionFixture(): ChangeWindowData {
   return {
     apiVersion: 'addons.projectcapsule.dev/v1alpha1',
     kind: 'ChangeWindow',
-    metadata: { name: 'development-downtime', uid: 'action-a', generation: 1 },
+    metadata: {
+      name: 'development-downtime',
+      uid: 'action-a',
+      generation: 1,
+      resourceVersion: '1',
+      creationTimestamp: '2026-10-01T00:00:00Z',
+      labels: { team: 'platform' },
+      annotations: { description: 'Workload maintenance' },
+    },
     spec: {
       namespaceSelectors: [{ matchLabels: { environment: 'development' } }],
       schedules: [{ name: 'daily', cron: '0 10 * * *', timeZone: 'UTC', duration: '2h' }],
@@ -28,7 +36,10 @@ export function actionFixture(): ChangeWindowData {
         },
       ],
     },
-    status: { observedGeneration: 1, conditions: [{ type: 'Ready', status: 'True' }] },
+    status: {
+      observedGeneration: 1,
+      conditions: [{ type: 'Ready', status: 'True', lastTransitionTime: '2026-10-01T10:00:00Z' }],
+    },
   };
 }
 

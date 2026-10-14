@@ -44,10 +44,10 @@ is also pinned. Review version changes and rerun `task check`.
 - `api/v1alpha1/`: cluster-scoped API types and generated DeepCopy methods.
 - `cmd/main.go`: Kubebuilder manager entry point and scheme registration.
 - `internal/`: controller, admission, scheduling, execution and metrics code.
-- `examples/`: executable ChangeWindow and executor RBAC examples.
+- `playground/manifests/examples/`: executable ChangeWindow and executor RBAC examples.
 - `charts/`: Helm packaging, including generated CRDs and RBAC.
 - `e2e/`: tests against the built controller in an isolated Kind cluster.
-- `hack/`: development tooling tests, native check configuration, and API-reference tooling.
+- `playground/`: Kind configuration, Flux installation, and demo/example manifests.
 - `Taskfile.yml`: inline developer and CI tasks; `devbox.json`/`devbox.lock`: tools.
 - `prek.toml`: native file checks and local development/commit-message hooks.
 
@@ -57,7 +57,7 @@ as the maintained entry point when incorporating that scaffold.
 
 Helm is the only supported installation method; see the
 [installation guide](docs/content/docs/getting-started/installation.md).
-CRDs and RBAC are generated directly into the chart; examples live in `examples/`.
+CRDs and RBAC are generated directly into the chart; examples live in `playground/manifests/examples/`.
 
 ## Run the controller on your host
 
@@ -120,8 +120,8 @@ devbox run -- task dev:deploy DEV_CONTEXT=kind-my-dev DEV_KIND_CLUSTER=my-dev
 Run these commands from the repository root. For repeated commands, enter
 `devbox shell` once and use `task dev:deploy` inside it. A bare `task` outside
 Devbox does not load the pinned tools: errors such as a missing `controller-gen`
-mean the development environment is not active. The task checks its required
-tools before generating code, building an image, or accessing the cluster.
+mean the development environment is not active. Task uses the tools on PATH;
+Devbox owns their versions, and command failures stop dependent steps.
 
 Kind is the default `DEV_IMAGE_MODE`. The task verifies that the selected context
 points to that Kind cluster, builds for its node architecture, and uses a fresh
@@ -167,32 +167,30 @@ generated files. It assumes intended source/generated files have been added to
 Git. Generation task calls are serialized and deduplicated within a Task run.
 
 `task fmt` formats Go (including tests) and maintained YAML. `task lint`,
-`task lint:yaml`, `task lint:actions`, `task lint:shell`, and `task helm:lint` match
+`task lint:yaml`, `task lint:actions`, and `task helm:lint` match
 CI checks. YAML validation uses prek's Rust-native parser; yamlfmt checks style.
 Generated CRDs/RBAC retain their generator's formatting, and Helm templates are
 validated through Helm instead of being parsed as ordinary YAML.
 Actionlint uses ShellCheck for workflow commands; its optional Python checker is
 disabled. Task implementations live directly in `Taskfile.yml`, including image
 builds, releases, documentation, development deployment, and e2e cleanup.
-`task lint:shell` checks those inline commands with ShellCheck. Tasks that need
-Bash signal handling or timers use an inline Bash block.
+Tasks that need Bash signal handling or timers use an inline Bash block.
 
 `task hooks:install` replaces pre-commit's existing `pre-commit` and `commit-msg`
 Git hook shims with prek, without chaining the old Python hooks.
-Every hook calls a Task target through `devbox run -- task`, including file
-hygiene, YAML formatting, and Conventional Commit validation. The same targets
-can be run directly in a Devbox shell. `task lint:files` invokes prek's native
-checks through `hack/prek-builtins.toml`; that configuration contains no Task
-hooks, avoiding recursion. File hygiene checks report changes without modifying
-files; fix reported issues and stage them before retrying. No Python environments
-or pip dependencies are used. `task hooks:check` runs all pre-commit hooks on tracked files; new files must
-be staged to participate. The generator hook runs before checks that consume its
-output.
+Prefer predefined prek hooks: native file hygiene and syntax checks live directly
+in `prek.toml`. Project-specific generation, build, formatting, and commit hooks
+call Task targets through `devbox run -- task`. `task lint:files` selects only the
+builtin `files` group, avoiding recursive calls. File hygiene checks report issues
+without modifying files. Fix and stage changes before retrying. No Python
+environments or pip dependencies are used.
 
-`task test:tooling` exercises Task variables, failure propagation, native syntax
-and commit checks, Helm rendering, and enterprise dry runs without publishing
-or accessing a cluster. The legacy hyphenated command names remain Task aliases
-where useful, for example `task test-unit` and `task enterprise-release`.
+`task hooks:check` runs all pre-commit hooks on tracked files; new files must be
+staged to participate. Generation runs before checks that consume its output.
+Validate tooling with native linters, Task dry runs, and the affected commands.
+Keep product tests beside their code; do not add standalone Go/JS harnesses to
+assert configuration text, versions, or repository layout. Legacy hyphenated
+commands remain aliases where useful, such as `task enterprise-release`.
 
 ## Runtime and validation
 
@@ -253,25 +251,31 @@ then run the documentation checks and inspect the rendered site.
 Edit weighted Markdown pages under `docs/content/docs/`. Group indexes define
 the sidebar. Use Hugo `relref` links between pages so navigation also works on
 project sites. The shared `example` shortcode and download mounts read directly
-from `examples/`; do not duplicate executable examples.
+from `playground/manifests/examples/`; do not duplicate executable examples.
 
-The homepage explorer renders `examples/quickstart.yaml` without changing
+The homepage explorer renders `playground/manifests/examples/quickstart.yaml` without changing
 its content. Annotations in `docs/data/window_example.yaml` connect each top-level
 spec block to its explanation, guide, and API type. Keep those links accurate as
-the API evolves. The static checks verify that copyable YAML and the download
+the API evolves. The browser tests verify that copyable YAML and the download
 exactly match the executable sample.
 
-`docs/content/docs/reference/api.md` is generated by the pinned `crd-ref-docs`
-Go tool in `hack/tools/`. Run `task docs:generate` after changing API types.
-The generator's dependencies stay outside the controller module. The empty
-`docs/go.mod` also prevents Go tools from traversing npm dependencies.
+`docs/content/docs/reference/api.md` is generated from the Helm CRDs by
+[crdoc](https://github.com/fybrik/crdoc). Run `task docs:generate` after changing API
+types; it refreshes chart manifests first. `docs/api-reference.yaml` supplies the
+title and API selection to crdoc's native frontmatter template.
 
-`task docs:check` checks generated-reference drift, validates examples, and
-builds root and project-site variants. It verifies every page's local links,
-anchors, assets, search index, and downloadable examples. For theme changes,
-also check search, code copying, dark mode, and mobile navigation in a browser.
-The Sass partial suppresses only known deprecations in Doks/Bootstrap; other
-build warnings still fail validation.
+crdoc is not currently indexed by Devbox. The Devbox initialization hook installs
+the pinned `fybrik.io/crdoc` CLI into `.devbox/crdoc/<version>/bin` on first use
+and adds it to PATH. Change `CRDOC_VERSION` in `devbox.json` to upgrade it. This
+needs no wrapper, extra Go module, or controller dependency. The empty
+`docs/go.mod` keeps npm dependencies outside controller Go tooling.
+
+`task docs:check` checks generated-reference drift, builds root and project-site
+variants, and uses lychee to check local links, fragments, and assets offline.
+External website availability does not affect this check. Policy unit tests
+validate the executable ChangeWindow examples. For theme changes, also run the
+browser tests for search, copying, dark mode, and mobile navigation. Known
+Doks/Bootstrap Sass deprecations are suppressed; other build warnings fail.
 
 For interactive documentation changes, install Chromium once and run the browser
 suite. It covers desktop/mobile, keyboard selection, copying, dark mode, and the
@@ -287,7 +291,9 @@ CI installs Chromium with its system dependencies and runs the same tests.
 Production output is in `dist/docs/`. The Documentation workflow checks the site
 and uploads a preview artifact for pull requests. Every push to `main` also
 deploys the checked site to GitHub Pages; it can be rerun manually on `main`.
-Builds use the base URL returned by Pages, including a configured custom domain.
+Builds use the canonical HTTPS URL from `Taskfile.yml`. Keep it and the custom
+domain in `docs/hugo.toml` aligned; an HTTP base URL causes browsers to block
+the navigation and search scripts as mixed content.
 
 In the repository settings, select **Pages → Build and deployment → Source →
 GitHub Actions** once. The workflow uses the built-in token and the `github-pages`
@@ -321,8 +327,8 @@ GitHub Pages hosts the site; Netlify manages its DNS.
 
 The CNAME value is a hostname, without `https://` or a repository path.
 A `CNAME` file in the generated site is unnecessary for an Actions-based Pages
-workflow. Hugo and Task default to the production URL, and CI uses the URL returned
-by Configure Pages. Netlify does not need a build or hosting configuration.
+workflow. Hugo, Task and CI use the HTTPS production URL. Netlify does not need a
+build or hosting configuration.
 
 See [GitHub's custom domain setup](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-domains/dns-records/).
@@ -332,9 +338,9 @@ and [Netlify DNS records](https://docs.netlify.com/manage/domains/configure-doma
 If `hugo version` reports an older Homebrew/system binary, use
 `devbox run -- task docs:serve`. Devbox requires Nix. Alternatively, install
 Hugo Extended 0.166.0 or newer and Node 24 and put them first on `PATH`.
-Documentation tasks reject unsupported Hugo versions before generating or
-building files. Use the Task commands to expose the local Sass compiler on
-`PATH`; installing the theme does not replace your system Hugo.
+Task delegates compatibility checks to Hugo and the theme. Use the Task commands
+to expose the local Sass compiler on `PATH`; installing the theme does not replace
+your system Hugo.
 
 The website's [development guide](docs/content/docs/development/contributing.md)
 explains architecture, testing, and the contribution/release process.
@@ -442,12 +448,13 @@ public service. See [Scorecard setup and private repository permissions](https:/
 ## Temporary playground
 
 `devbox run -- task playground` creates a fresh Kind cluster with the current ko
-controller build, Headlamp, the current plugin, and a cycling downscale example.
+controller build, Flux-managed Headlamp, the current plugin, and a cycling downscale example.
 It serves Headlamp at `http://127.0.0.1:18081` for 30 minutes after readiness, then
 removes the cluster, private kubeconfig, port-forward and staged plugin. Ctrl+C
 also cleans up. `PLAYGROUND_MINUTES` accepts 1–30; `PLAYGROUND_PORT` and
 `PLAYGROUND_CLUSTER` choose a free port and a new cluster name. Existing clusters
 and the developer's current context are preserved.
 
-See the [playground guide](docs/content/docs/development/playground.md) for the
+See [playground/README.md](playground/README.md) for the installation/manifests
+layout and the [playground guide](docs/content/docs/development/playground.md) for the
 demo identity's permissions and an example maintenance cycle.

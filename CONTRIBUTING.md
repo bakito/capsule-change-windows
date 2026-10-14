@@ -8,7 +8,7 @@
 6. Use Conventional Commit messages, for example `feat: add schedule validation`.
 
 Go files use the Project Capsule copyright and Apache-2.0 SPDX header from
-`hack/boilerplate.go.txt`. Never edit generated DeepCopy methods or CRDs by hand.
+`api/boilerplate.go.txt`. Never edit generated DeepCopy methods or CRDs by hand.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for tooling, layout, and runtime behavior.
 Install Git hooks with `devbox run -- task hooks:install`. Hooks use prek and

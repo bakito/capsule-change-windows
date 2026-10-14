@@ -128,10 +128,18 @@ func TestReconcile(t *testing.T) {
 	if err := c.Get(t.Context(), client.ObjectKey{Namespace: "controller", Name: "change-window-test-uid"}, journal); err != nil {
 		t.Fatal("capture not retained", err)
 	}
+	if err := c.Get(t.Context(), req.NamespacedName, a); err != nil {
+		t.Fatal(err)
+	}
+	assertConditions(t, a, metav1.ConditionFalse, metav1.ConditionFalse, api.ReasonFinishing)
 	f.failEnd = false
 	if _, err := r.Reconcile(t.Context(), req); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.Get(t.Context(), req.NamespacedName, a); err != nil {
+		t.Fatal(err)
+	}
+	assertConditions(t, a, metav1.ConditionTrue, metav1.ConditionFalse, api.ReasonFinished)
 	if f.ends != 2 || f.lists != 1 || f.starts != 1 {
 		t.Fatalf("unexpected calls %+v", f)
 	}
