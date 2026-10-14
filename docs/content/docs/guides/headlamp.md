@@ -51,7 +51,7 @@ Installation is supported via Plugin Manager for Headlamp.
   configContent: |
     plugins:
       - name: capsule
-        source: https://artifacthub.io/packages/headlamp/change-windows-headlamp/capsule-change-windows
+        source: https://artifacthub.io/packages/headlamp/change-windows-headlamp/change-windows
         version: 0.1.0
     installOptions:
       parallel: true
