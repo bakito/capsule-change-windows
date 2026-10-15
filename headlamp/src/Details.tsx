@@ -168,7 +168,7 @@ function WindowSections({ item, cluster }: { item: ChangeWindow; cluster: string
             Executor:{' '}
             {action.spec.serviceAccount
               ? `${action.spec.serviceAccount.namespace}/${action.spec.serviceAccount.name}`
-              : 'None (admission only)'}
+              : 'Missing service account'}
           </Typography>
           {action.spec.actions?.map(step => (
             <Typography key={step.name}>

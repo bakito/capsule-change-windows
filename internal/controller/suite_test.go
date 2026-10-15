@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,6 +115,70 @@ func TestAPI(t *testing.T) {
 				t.Fatalf("incorrect kubectl columns: %s", raw)
 			}
 			now = now.Add(time.Hour)
+		}
+	})
+	t.Run("service account schema", func(t *testing.T) {
+		for _, mode := range []string{"admission", "actions", "nodes"} {
+			for _, tc := range []struct {
+				name    string
+				account any
+			}{
+				{"missing", nil},
+				{"null", nil},
+				{"empty", map[string]any{}},
+				{"missing-namespace", map[string]any{"name": "executor"}},
+				{"missing-name", map[string]any{"namespace": "dev"}},
+				{"empty-namespace", map[string]any{"namespace": "", "name": "executor"}},
+				{"empty-name", map[string]any{"namespace": "dev", "name": ""}},
+				{"invalid-namespace", map[string]any{"namespace": "Not/valid", "name": "executor"}},
+				{"invalid-name", map[string]any{"namespace": "dev", "name": "Not/valid"}},
+				{"long-namespace", map[string]any{"namespace": strings.Repeat("a", 64), "name": "executor"}},
+				{"long-name", map[string]any{"namespace": "dev", "name": strings.Repeat("a", 254)}},
+				{"valid", map[string]any{"namespace": "dev", "name": "window.executor"}},
+			} {
+				t.Run(mode+"/"+tc.name, func(t *testing.T) {
+					window := testutil.Action()
+					window.ObjectMeta = metav1.ObjectMeta{GenerateName: "service-account-"}
+					switch mode {
+					case "actions":
+						window.Spec.Actions = []api.ResourceAction{{Name: "apply", Targets: []string{"deployments"}, OnStart: &api.ActionStep{Apply: api.Apply{Template: "spec: {}"}}}}
+					case "nodes":
+						window.Spec.NamespaceSelectors = nil
+						window.Spec.Targets[0].APIVersion, window.Spec.Targets[0].Kind = "v1", "Node"
+						window.Spec.Admission[0].Subresources = nil
+					}
+					// Create a valid object first so the same invalid reference is tested on updates.
+					if err := c.Create(ctx, window); err != nil {
+						t.Fatal(err)
+					}
+					data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(window)
+					if err != nil {
+						t.Fatal(err)
+					}
+					obj := &unstructured.Unstructured{Object: data}
+					obj.SetGroupVersionKind(api.GroupVersion.WithKind("ChangeWindow"))
+					if tc.name == "missing" {
+						unstructured.RemoveNestedField(obj.Object, "spec", "serviceAccount")
+					} else if err := unstructured.SetNestedField(obj.Object, tc.account, "spec", "serviceAccount"); err != nil {
+						t.Fatal(err)
+					}
+					check := func(err error) {
+						t.Helper()
+						if tc.name == "valid" {
+							if err != nil {
+								t.Fatal(err)
+							}
+						} else if !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "serviceAccount") {
+							t.Fatalf("expected service account schema rejection, got %v", err)
+						}
+					}
+					check(c.Update(ctx, obj.DeepCopy()))
+					obj.SetName("")
+					obj.SetResourceVersion("")
+					obj.SetUID("")
+					check(c.Create(ctx, obj))
+				})
+			}
 		}
 	})
 	t.Run("GVK pattern schema", func(t *testing.T) {

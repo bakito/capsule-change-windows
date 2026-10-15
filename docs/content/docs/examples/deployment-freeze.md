@@ -4,8 +4,8 @@ weight: 30
 ---
 
 Block Deployment writes during a weekly maintenance window and warn users in
-advance. This policy is admission-only: it does not modify workloads or need an
-executor ServiceAccount.
+advance. This policy is admission-only. Its manifest includes the required
+ServiceAccount without workload or impersonation permissions.
 
 ## Complete example
 

@@ -19,10 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	kyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	api "github.com/projectcapsule/schedule-action-controller/api/v1alpha1"
 )
@@ -39,20 +39,7 @@ func TestAfterHoursExample(t *testing.T) {
 		}
 		createMatching(t, admin, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, Labels: labels}})
 	}
-	data, err := os.ReadFile("../playground/manifests/examples/after-hours-executor-rbac.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoder := kyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
-	for {
-		obj := &unstructured.Unstructured{}
-		err := decoder.Decode(obj)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
+	window := prepareExample(t, admin, "after-hours.yaml", func(obj *unstructured.Unstructured) {
 		if obj.GetNamespace() == "development" {
 			obj.SetNamespace("after-hours")
 		}
@@ -64,8 +51,7 @@ func TestAfterHoursExample(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		createMatching(t, admin, obj)
-	}
+	})
 	dep := deployment("all-deployments", "after-hours", 2, false)
 	createMatching(t, admin, dep)
 	zero := deployment("already-zero", "after-hours", 0, false)
@@ -74,14 +60,6 @@ func TestAfterHoursExample(t *testing.T) {
 	createMatching(t, admin, other)
 	stateful := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "all-statefulsets", Namespace: "after-hours"}, Spec: appsv1.StatefulSetSpec{ServiceName: "example", Replicas: ptr.To(int32(3)), Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "stateful"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "stateful"}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "pause", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	createMatching(t, admin, stateful)
-	data, err = os.ReadFile("../playground/manifests/examples/after-hours.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	window := &api.ChangeWindow{}
-	if err := yaml.UnmarshalStrict(data, window); err != nil {
-		t.Fatal(err)
-	}
 	zone, err := time.LoadLocation(window.Spec.Schedules[0].TimeZone)
 	if err != nil {
 		t.Fatal(err)
@@ -121,4 +99,46 @@ func TestAfterHoursExample(t *testing.T) {
 	})
 	assertReplicas(t, admin, zero, 0)
 	assertReplicas(t, admin, other, 1)
+}
+
+// prepareExample loads the window and deploys its bundled ServiceAccount and RBAC.
+func prepareExample(t *testing.T, c client.Client, filename string, adapt func(*unstructured.Unstructured)) *api.ChangeWindow {
+	t.Helper()
+	data, err := os.ReadFile("../playground/manifests/examples/" + filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoder := kyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+	var window *api.ChangeWindow
+	for {
+		obj := &unstructured.Unstructured{}
+		err := decoder.Decode(obj)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(obj.Object) == 0 {
+			continue
+		}
+		if obj.GetKind() == "ChangeWindow" {
+			if window != nil {
+				t.Fatal("example contains multiple ChangeWindows")
+			}
+			window = &api.ChangeWindow{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, window); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if adapt != nil {
+			adapt(obj)
+		}
+		createMatching(t, c, obj)
+	}
+	if window == nil {
+		t.Fatal("example contains no ChangeWindow")
+	}
+	return window
 }

@@ -403,8 +403,11 @@ Headlamp tests run on pull requests and pushes to `main`. Release tags run only
 metadata to the `headlamp-plugin` branch.
 
 `helm:package` and `helm:push` use the `change-windows` chart and `VERSION`;
-`helm:docs` generates its README. Helm schema generation is not configured in this
-repository. Release tasks require the signing/SBOM tools installed by their CI jobs.
+`helm:docs` generates its README. `task helm:schema` (alias `helm-schema`) generates
+`values.schema.json` from values and Helm Docs comments using the pinned Helm schema
+plugin. Chart linting and packaging regenerate the schema; `task helm:verify` checks
+generated documentation and schema drift. Release tasks require the signing/SBOM
+tools installed by their CI jobs.
 
 Enterprise tasks package and publish the matching controller image and Helm chart:
 

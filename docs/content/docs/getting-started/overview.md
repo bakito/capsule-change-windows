@@ -34,6 +34,7 @@ or browse the [generated API reference]({{< relref "/docs/reference/api" >}}). T
 5. On exit, end actions restore or change the recorded resources. Failed actions
    retry using the durable journal.
 
-Admission rules can be used on their own, without resource actions or an executor.
+Admission rules can be used on their own, without resource actions. Every window
+requires a service account; admission-only identities need no executor RBAC.
 Resource actions are transitions: after a successful patch, they do not continuously
 enforce the value throughout the window.

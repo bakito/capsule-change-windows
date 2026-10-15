@@ -197,6 +197,15 @@ tasks:
       - npm run build
       - npm run package
 
+  headlamp:release-build:
+    desc: Check and build the versioned plugin for GoReleaser without changing source package files.
+    env:
+      HEADLAMP_VERSION: '{{trimPrefix "v" .VERSION}}'
+    cmds:
+      - task: headlamp:install
+      - task: headlamp:check
+      - npm --prefix headlamp/dist version "$HEADLAMP_VERSION" --no-git-tag-version --allow-same-version --ignore-scripts
+
   lint:
     desc: Lint Go sources.
     aliases: [golint]
@@ -748,12 +757,24 @@ tasks:
     aliases: [helm-lint]
     cmds:
       - task: manifests
+      - task: helm:schema
       - helm lint charts/change-windows --strict
+      - |
+        for values in charts/change-windows/ci/*-values.yaml; do
+          helm lint charts/change-windows --strict --values "$values"
+        done
 
   helm:docs:
     desc: Generate chart documentation from values and the chart README template.
     cmds:
       - helm-docs --chart-search-root charts/change-windows
+
+  helm:schema:
+    desc: Generate the Helm values JSON schema using Helm Docs comments.
+    aliases: [helm-schema]
+    dir: charts/change-windows
+    cmds:
+      - helm schema --use-helm-docs
 
   helm:artifacthub:
     desc: Lint chart metadata with the Artifact Hub CLI container.
@@ -763,12 +784,12 @@ tasks:
       - docker run --rm --volume "${CHART_DIRECTORY}:/charts:ro" --workdir /charts --entrypoint ah artifacthub/ah lint
 
   helm:verify:
-    desc: Check chart rendering and documentation drift.
+    desc: Check chart rendering and generated documentation/schema drift.
     cmds:
       - task: helm:lint
       - task: helm:docs
-      - git diff --exit-code -- charts/change-windows/README.md
-      - test -z "$(git ls-files --others --exclude-standard charts/change-windows/README.md)"
+      - git diff --exit-code -- charts/change-windows/README.md charts/change-windows/values.schema.json
+      - test -z "$(git ls-files --others --exclude-standard charts/change-windows/README.md charts/change-windows/values.schema.json)"
 
   helm:package:
     desc: Package the chart using VERSION.
@@ -776,6 +797,7 @@ tasks:
       CHART_VERSION: '{{trimPrefix "v" .VERSION}}'
     cmds:
       - task: manifests
+      - task: helm:schema
       - mkdir -p dist/charts
       - helm package charts/change-windows --version "$CHART_VERSION" --app-version "$CHART_VERSION" --destination dist/charts
 

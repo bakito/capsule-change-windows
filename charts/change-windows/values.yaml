@@ -113,12 +113,14 @@ manager:
   livenessProbe:
     httpGet:
       path: /healthz
+      # @schema type: [integer, string]
       port: 8081
 
   # -- Configure the readiness probe using Deployment probe spec
   readinessProbe:
     httpGet:
       path: /readyz
+      # @schema type: [integer, string]
       port: 8081
 
   # -- Set the resource requests/limits
@@ -151,8 +153,16 @@ manager:
   # -- Do not use Host Users (User Namespaces)
   hostUsers: false
 
-  # -- Extra arguments to pass to the manager container
+  # Arguments to pass to the manager container
   args:
+    # -- Maximum concurrent ChangeWindow reconciliations
+    workers: 1
+    # @schema type: number
+    # -- Kubernetes client QPS
+    kubeApiQPS: 50
+    # -- Kubernetes client burst
+    kubeApiBurst: 100
+    # -- Extra arguments
     extra:
       - "--leader-elect"
 
@@ -170,12 +180,14 @@ serviceAccount:
 
 # Admission Webhooks for the change-windows controller
 webhooks:
+  # @schema type: [boolean, string]
   # -- Specifies whether the admission webhooks are enabled
   enabled: true
   # -- Additional Labels for all webhooks
   labels: {}
   # -- Additional Annotations for all webhooks
   annotations: {}
+  # @schema type: [boolean, string]
   # -- When `crds.exclusive` is `true` the webhooks will be installed
   exclusive: false
 
@@ -190,7 +202,7 @@ webhooks:
     # -- Custom service namespace for the webhook service
     namespace: ""
     # -- (integer, null) Custom service port for the webhook service
-    port: # @schema type:[integer, null]
+    port: # @schema type: [integer, string, null]
 
   # Certificate configuration for the webhook service (by default requires cert-manager)
   certificate:
@@ -200,6 +212,7 @@ webhooks:
       name: ""
 
     generate:
+      # @schema type: [boolean, string]
       # -- Enable cert-manager generated certificates for the webhook service
       enabled: true
       # -- Additional DNS Names to include in certificate
@@ -218,6 +231,7 @@ webhooks:
     resources:
       # -- [FailurePolicy](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#failure-policy)
       failurePolicy: Fail
+      # @schema type: [integer, string]
       # -- [TimeoutSeconds](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#timeouts)
       timeoutSeconds: 5
       # -- [MatchPolicy](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#matching-requests-matchpolicy)
@@ -251,6 +265,7 @@ webhooks:
     changewindows:
       # -- [FailurePolicy](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#failure-policy)
       failurePolicy: Fail
+      # @schema type: [integer, string]
       # -- [TimeoutSeconds](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#timeouts)
       timeoutSeconds: 5
       # -- [MatchPolicy](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#matching-requests-matchpolicy)

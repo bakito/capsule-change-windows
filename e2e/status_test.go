@@ -31,6 +31,7 @@ func TestWindowStatus(t *testing.T) {
 	}
 	start := time.Now().UTC().Add(time.Minute).Truncate(time.Minute)
 	window := &api.ChangeWindow{ObjectMeta: metav1.ObjectMeta{Name: "status-lifecycle"}, Spec: api.ChangeWindowSpec{
+		ServiceAccount:     &api.ServiceAccountReference{Namespace: "status-selected", Name: "default"},
 		NamespaceSelectors: []metav1.LabelSelector{{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "status-selected"}}},
 		Schedules:          []api.Schedule{{Name: "daily", Cron: fmt.Sprintf("%d %d * * *", start.Minute(), start.Hour()), TimeZone: "UTC", Duration: metav1.Duration{Duration: 10 * time.Second}}},
 		Targets:            []api.Target{{Name: "configs", APIVersion: "v1", Kind: "ConfigMap"}},

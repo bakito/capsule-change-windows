@@ -3,6 +3,9 @@ kind: ChangeWindow
 metadata:
   name: weekly-maintenance
 spec:
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: weekly-maintenance
   namespaceSelectors:
     - matchLabels:
         maintenance: enabled
@@ -33,3 +36,10 @@ spec:
           when: BeforeStart
           within: 1h
           message: "Maintenance begins at {{ .window.start }} (in {{ .window.startsIn }})."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: weekly-maintenance
+  namespace: schedule-action-controller-system
+automountServiceAccountToken: false

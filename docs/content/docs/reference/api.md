@@ -58,8 +58,6 @@ ChangeWindow describes scheduled resource changes and admission restrictions.
         <td>object</td>
         <td>
           ChangeWindowSpec selects namespaces and resources for scheduled behavior.<br/>
-          <br/>
-            <i>Validations</i>:<li>!has(self.actions) || size(self.actions) == 0 || has(self.serviceAccount): actions require a serviceAccount</li>
         </td>
         <td>true</td>
       </tr><tr>
@@ -97,6 +95,14 @@ ChangeWindowSpec selects namespaces and resources for scheduled behavior.
         </td>
         <td>true</td>
       </tr><tr>
+        <td><b><a href="#changewindowspecserviceaccount">serviceAccount</a></b></td>
+        <td>object</td>
+        <td>
+          ServiceAccount is required for every window, including admission-only windows.
+Resource actions use this identity for workload reads and SSA writes.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
         <td><b><a href="#changewindowspectargetsindex">targets</a></b></td>
         <td>[]object</td>
         <td>
@@ -131,13 +137,6 @@ ChangeWindowSpec selects namespaces and resources for scheduled behavior.
           NamespaceSelectors are ORed for namespaced targets. Required when any target is namespaced.
 Omit for Node-only windows; Node targets use their own label selector.
 An explicit empty selector matches all non-protected namespaces.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
-        <td><b><a href="#changewindowspecserviceaccount">serviceAccount</a></b></td>
-        <td>object</td>
-        <td>
-          ServiceAccount is the identity used for resource reads and SSA writes.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -190,6 +189,41 @@ An explicit empty selector matches all non-protected namespaces.<br/>
             <i>Default</i>: UTC<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### ChangeWindow.spec.serviceAccount
+<sup><sup>[↩ Parent](#changewindowspec)</sup></sup>
+
+
+
+ServiceAccount is required for every window, including admission-only windows.
+Resource actions use this identity for workload reads and SSA writes.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          <br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          <br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 
@@ -1185,40 +1219,6 @@ the values array must be empty. This array is replaced during a strategic
 merge patch.<br/>
         </td>
         <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### ChangeWindow.spec.serviceAccount
-<sup><sup>[↩ Parent](#changewindowspec)</sup></sup>
-
-
-
-ServiceAccount is the identity used for resource reads and SSA writes.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>name</b></td>
-        <td>string</td>
-        <td>
-          <br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>namespace</b></td>
-        <td>string</td>
-        <td>
-          <br/>
-        </td>
-        <td>true</td>
       </tr></tbody>
 </table>
 

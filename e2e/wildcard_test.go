@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	api "github.com/projectcapsule/schedule-action-controller/api/v1alpha1"
 )
@@ -48,14 +46,7 @@ func TestFreezeExceptPodsExample(t *testing.T) {
 	createMatching(t, admin, dep)
 	config := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "existing", Namespace: "freeze-all"}, Data: map[string]string{"value": "original"}}
 	createMatching(t, admin, config)
-	data, err := os.ReadFile("../playground/manifests/examples/freeze-except-pods.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	window := &api.ChangeWindow{}
-	if err := yaml.UnmarshalStrict(data, window); err != nil {
-		t.Fatal(err)
-	}
+	window := prepareExample(t, admin, "freeze-except-pods.yaml", nil)
 	window.Spec.Schedules = []api.Schedule{{Name: "active", Cron: "* * * * *", Duration: metav1.Duration{Duration: 2 * time.Minute}}}
 	createMatching(t, admin, window)
 	awaitWindow(t, admin, window)

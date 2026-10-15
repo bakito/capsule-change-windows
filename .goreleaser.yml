@@ -1,5 +1,8 @@
 version: 2
 project_name: change-windows
+before:
+  hooks:
+    - 'task headlamp:release-build VERSION={{ .Version }}'
 builds:
   - id: controller
     main: ./cmd
@@ -21,6 +24,22 @@ archives:
       - controller
     name_template: >-
       {{ .ProjectName }}_ {{- .Version }}_ {{- .Os }}_ {{- .Arch }}
+  - id: headlamp
+    meta: true
+    name_template: 'change-windows-{{ .Version }}'
+    wrap_in_directory: headlamp
+    files:
+      - src: headlamp/dist/main.js
+        strip_parent: true
+        info:
+          mtime: '{{ .CommitDate }}'
+      - src: headlamp/dist/package.json
+        strip_parent: true
+        info:
+          mtime: '{{ .CommitDate }}'
+      - src: LICENSE
+        info:
+          mtime: '{{ .CommitDate }}'
 release:
   prerelease: auto
   footer: |

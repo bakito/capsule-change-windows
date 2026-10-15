@@ -3,6 +3,9 @@ kind: ChangeWindow
 metadata:
   name: replica-maintenance
 spec:
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: replica-maintenance
   namespaceSelectors:
     - matchLabels:
         environment: production
@@ -53,3 +56,10 @@ spec:
             - name: replicas-changed
               expression: "object.spec.replicas != oldObject.spec.replicas"
           message: "Replica changes will be frozen at {{ .window.start }}."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: replica-maintenance
+  namespace: schedule-action-controller-system
+automountServiceAccountToken: false

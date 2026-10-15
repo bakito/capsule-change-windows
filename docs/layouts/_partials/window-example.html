@@ -9,6 +9,11 @@
 {{- $active := dict -}}
 {{- $seen := slice -}}
 {{- range split (strings.TrimSuffix "\n" $source.Content) "\n" -}}
+  {{- if eq . "---" -}}
+    {{- $segments = $segments | append (dict "lines" $lines "section" $active) -}}
+    {{- $lines = slice -}}
+    {{- $active = dict -}}
+  {{- end -}}
   {{- with index $links . -}}
     {{- if in $seen .key -}}{{- errorf "Repeated homepage example field %s" .key -}}{{- end -}}
     {{- $segments = $segments | append (dict "lines" $lines "section" $active) -}}
@@ -55,7 +60,7 @@
         </div>
       </div>
       {{ end }}
-      <p class="window-example__setup">Adapt the labels and identity to your cluster. <a href="{{ relref . "/docs/guides/security#executor-permissions" }}">Set up executor permissions</a> before applying.</p>
+      <p class="window-example__setup">The YAML includes the ServiceAccount and executor RBAC. <a href="{{ relref . "/docs/guides/security#executor-permissions" }}">Adapt the permissions</a> and labels to your cluster before applying.</p>
       <a href="{{ relref . "/docs/examples" }}">Browse more examples →</a>
     </aside>
   </div>

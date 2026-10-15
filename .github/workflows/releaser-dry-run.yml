@@ -10,6 +10,7 @@ on:
       - 'api/**'
       - 'cmd/**'
       - 'internal/**'
+      - 'headlamp/**'
       - 'go.*'
 permissions:
   contents: read

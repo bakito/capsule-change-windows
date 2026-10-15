@@ -13,18 +13,15 @@ install CRDs, admission webhooks, and controller RBAC.
 [![Helm Chart](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/change-windows)](https://artifacthub.io/packages/search?repo=change-windows)
 
 ```shell
-helm upgrade --install scheduled-action charts/change-windows \
-  --namespace capsule-system --create-namespace \
-  --set image.registry=registry.example.com \
-  --set image.repository=scheduled-action \
-  --set image.tag=dev
+helm upgrade --install change-windows charts/change-windows \
+  --namespace capsule-system --create-namespace
 
 kubectl -n capsule-system rollout status \
-  deployment/scheduled-action-scheduled-action
+  deployment/change-windows
 ```
 
 These instructions use the local chart and a self-built image; they do not depend
-on a published release. The release name is `scheduled-action` and its namespace
+on a published release. The release name is `change-windows` and its namespace
 is `capsule-system`; both are configurable. The release namespace is always
 excluded from maintenance selection.
 
@@ -38,14 +35,18 @@ the executor you created.
 ```shell
 kubectl create namespace maintenance-demo
 kubectl label namespace maintenance-demo maintenance=enabled
-kubectl apply -f playground/manifests/examples/maintenance-only.yaml
+# Match the bundled account and its reference to this release's namespace.
+sed 's/schedule-action-controller-system/capsule-system/g' \
+  playground/manifests/examples/maintenance-only.yaml | kubectl apply -f -
 kubectl get changewindows
 kubectl get changewindow weekly-maintenance -o yaml
 ```
 
 This example blocks Deployment changes every Sunday from 02:00 to 04:00 UTC. It
-warns callers in the preceding hour. It does not scale workloads and needs no
-executor service account.
+warns callers in the preceding hour. The YAML also deploys its required service
+account. This admission-only example grants it no workload or impersonation
+permissions. The substitution above adapts the playground namespace to this Helm
+installation.
 
 {{< example "maintenance-only.yaml" >}}
 

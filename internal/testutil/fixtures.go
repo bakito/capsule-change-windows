@@ -26,6 +26,7 @@ func Mapper() meta.RESTMapper {
 
 func Action() *api.ChangeWindow {
 	return &api.ChangeWindow{ObjectMeta: metav1.ObjectMeta{Name: "maintenance", UID: "test-uid", Generation: 1}, Spec: api.ChangeWindowSpec{
+		ServiceAccount:     &api.ServiceAccountReference{Namespace: "dev", Name: "executor"},
 		NamespaceSelectors: []metav1.LabelSelector{{MatchLabels: map[string]string{"environment": "development"}}},
 		Schedules:          []api.Schedule{{Name: "daily", Cron: "0 10 * * *", TimeZone: "UTC", Duration: metav1.Duration{Duration: time.Hour}}},
 		Targets:            []api.Target{{Name: "deployments", APIVersion: "apps/v1", Kind: "Deployment", Selector: metav1.LabelSelector{MatchLabels: map[string]string{"maintenance": "enabled"}}}},

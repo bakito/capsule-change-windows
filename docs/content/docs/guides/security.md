@@ -10,23 +10,29 @@ selectors establish scope; they do not authorize access to selected workloads.
 
 ## Executor permissions
 
-Resource actions require `spec.serviceAccount`. The controller impersonates that
-identity for workload reads and patches. Admission-only policies do not need an
-executor.
+Every ChangeWindow requires `spec.serviceAccount` with a valid namespace and
+service-account name, including admission-only windows. The examples deploy the
+referenced ServiceAccount in the same YAML file. Admission-only identities need
+no workload permissions or manager impersonation grants. For resource actions,
+the controller impersonates the account for workload reads and patches.
 
-Grant two separate permissions: the manager may impersonate the specific approved
+When upgrading existing admission-only windows, create their service accounts and
+add the references before installing the updated CRD.
+
+For resource actions, grant two separate permissions: the manager may impersonate the specific approved
 service account, and that executor may read and patch the selected workload
 resources in the intended namespaces. The default installation grants neither
 arbitrary service-account impersonation nor workload write access.
 
-The samples assume an existing `development` namespace. Before applying them,
+The action examples include the ServiceAccount and RBAC and assume an existing
+`development` namespace. Before applying them,
 adapt the controller identity to your Helm release. For the release used in the
 [installation guide]({{< relref "/docs/getting-started/installation" >}}), find the
 manager service account with:
 
 ```shell
 kubectl -n capsule-system get pods \
-  -l app.kubernetes.io/instance=scheduled-action \
+  -l app.kubernetes.io/instance=change-windows \
   -o jsonpath='{.items[0].spec.serviceAccountName}{"\n"}'
 ```
 
@@ -37,7 +43,10 @@ output. Set the ChangeWindow's `spec.serviceAccount.namespace` to `capsule-syste
 and keep its name equal to the executor ServiceAccount's name. The manager and
 executor are separate identities.
 
-{{< example "executor-rbac.yaml" >}}
+The [complete downscale example]({{< relref "/docs/examples/downscale" >}}) and
+[quickstart download]({{< relurl "examples/quickstart.yaml" >}}) bundle the account,
+impersonation Role and RoleBinding, workload Role and RoleBinding, and ChangeWindow.
+Apply the complete bundle after adapting these identities.
 
 Repeat the workload Role and RoleBinding in each permitted namespace; avoid broad
 cluster grants merely to satisfy a selector. If you choose another Helm release

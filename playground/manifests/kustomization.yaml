@@ -3,5 +3,4 @@ kind: Kustomization
 # Install only the runnable demo. Other examples are opt-in and may overlap.
 resources:
   - demo/resources.yaml
-  - examples/executor-rbac.yaml
   - demo/window.yaml

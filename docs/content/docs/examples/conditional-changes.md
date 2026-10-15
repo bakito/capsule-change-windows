@@ -12,6 +12,9 @@ contain `spec.replicas`.
 
 {{< example "conditional-maintenance.yaml" >}}
 
+The manifest also deploys the window's required ServiceAccount. This admission-only
+identity has no workload or impersonation permissions.
+
 ## Expected behavior
 
 During the active window, members of `application-developers` and the

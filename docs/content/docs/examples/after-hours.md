@@ -38,14 +38,16 @@ deleted workloads or replacements with a different UID are not restored.
 
 ## Executor permissions
 
-This manifest grants access in the existing `development` namespace. Repeat the
+The complete YAML includes `after-hours-executor`, its impersonation permissions,
+and workload RBAC in the existing `development` namespace. Repeat the
 workload Role and RoleBinding for each selected namespace. Adjust the controller
 namespace and manager ServiceAccount subject for your Helm release, following
 the [executor setup instructions]({{< relref "/docs/guides/security#executor-permissions" >}}).
 Set `spec.serviceAccount.namespace` in the ChangeWindow to the same executor
 namespace and retain the executor name `after-hours-executor`.
 
-{{< example "after-hours-executor-rbac.yaml" >}}
+Apply the complete example file to deploy the account, permissions, and window
+together.
 
 The start action explicitly takes ownership of `spec.replicas` using `force`.
 Coordinate with HPAs, GitOps reconciliation, and other replica writers: this

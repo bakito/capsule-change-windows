@@ -205,7 +205,10 @@ The following Values are available for this chart.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | manager.affinity | object | `{}` | Set affinity rules |
-| manager.args | object | `{"extra":["--leader-elect"]}` | Extra arguments to pass to the manager container |
+| manager.args.extra | list | `["--leader-elect"]` | Extra arguments |
+| manager.args.kubeApiBurst | int | `100` | Kubernetes client burst |
+| manager.args.kubeApiQPS | int | `50` | Kubernetes client QPS |
+| manager.args.workers | int | `1` | Maximum concurrent ChangeWindow reconciliations |
 | manager.env | list | `[]` | Environment variables |
 | manager.hostUsers | bool | `false` | Do not use Host Users (User Namespaces) |
 | manager.image.pullPolicy | string | `"IfNotPresent"` | Set the image pull policy. |
