@@ -20,7 +20,6 @@ const (
 )
 
 // ChangeWindowSpec selects namespaces and resources for scheduled behavior.
-// +kubebuilder:validation:XValidation:rule="!has(self.actions) || size(self.actions) == 0 || has(self.serviceAccount)",message="actions require a serviceAccount"
 type ChangeWindowSpec struct {
 	// NamespaceSelectors are ORed for namespaced targets. Required when any target is namespaced.
 	// Omit for Node-only windows; Node targets use their own label selector.
@@ -40,9 +39,10 @@ type ChangeWindowSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=32
 	Targets []Target `json:"targets"`
-	// ServiceAccount is the identity used for resource reads and SSA writes.
-	// +optional
-	ServiceAccount *ServiceAccountReference `json:"serviceAccount,omitempty"`
+	// ServiceAccount is required for every window, including admission-only windows.
+	// Resource actions use this identity for workload reads and SSA writes.
+	// +kubebuilder:validation:Required
+	ServiceAccount *ServiceAccountReference `json:"serviceAccount"`
 	// +listType=map
 	// +listMapKey=name
 	// +kubebuilder:validation:MaxItems=16
@@ -94,8 +94,12 @@ type Target struct {
 
 type ServiceAccountReference struct {
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	Namespace string `json:"namespace"`
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	Name string `json:"name"`
 }
 

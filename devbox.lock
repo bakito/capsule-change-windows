@@ -817,6 +817,44 @@
         }
       }
     },
+    "kubernetes-helmPlugins.helm-schema@2.6.0": {
+      "last_modified": "2026-10-08T19:21:32Z",
+      "resolved": "github:NixOS/nixpkgs/8edc0c72e3a38faf5434e40d1f19431125fe4b30#kubernetes-helmPlugins.helm-schema",
+      "source": "devbox-search",
+      "version": "2.6.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/1zfjw8vaz06j2ysg06gvaih2ki70s92x-helm-schema-2.6.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/1zfjw8vaz06j2ysg06gvaih2ki70s92x-helm-schema-2.6.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/r2sk456d3vgcmi6aj62fk5jdxwkcwwwh-helm-schema-2.6.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/r2sk456d3vgcmi6aj62fk5jdxwkcwwwh-helm-schema-2.6.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/gn1sz7i7wcrx3d6pwf6y3796i56s0hs3-helm-schema-2.6.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/gn1sz7i7wcrx3d6pwf6y3796i56s0hs3-helm-schema-2.6.0"
+        }
+      }
+    },
     "lychee@0.24.2": {
       "last_modified": "2026-10-08T19:21:32Z",
       "resolved": "github:NixOS/nixpkgs/8edc0c72e3a38faf5434e40d1f19431125fe4b30#lychee",

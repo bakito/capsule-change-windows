@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	api "github.com/projectcapsule/schedule-action-controller/api/v1alpha1"
 	"github.com/projectcapsule/schedule-action-controller/internal/schedule"
@@ -97,8 +98,8 @@ func Compile(obj *api.ChangeWindow, mapper meta.RESTMapper) (*Compiled, error) {
 	if !hasNamespaced && len(obj.Spec.NamespaceSelectors) > 0 {
 		return nil, fmt.Errorf("omit namespaceSelectors for Node-only windows")
 	}
-	if len(obj.Spec.Actions) > 0 && (obj.Spec.ServiceAccount == nil || obj.Spec.ServiceAccount.Name == "" || obj.Spec.ServiceAccount.Namespace == "") {
-		return nil, fmt.Errorf("actions require a serviceAccount")
+	if obj.Spec.ServiceAccount == nil || len(validation.IsDNS1123Label(obj.Spec.ServiceAccount.Namespace)) != 0 || len(validation.IsDNS1123Subdomain(obj.Spec.ServiceAccount.Name)) != 0 {
+		return nil, fmt.Errorf("spec.serviceAccount requires a valid namespace and name")
 	}
 	names := map[string]bool{}
 	for _, a := range obj.Spec.Actions {

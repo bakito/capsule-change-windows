@@ -3,6 +3,9 @@ kind: ChangeWindow
 metadata:
   generateName: dev-readiness-
 spec:
+  serviceAccount:
+    namespace: default
+    name: default
   namespaceSelectors:
     - matchLabels:
         change-windows.dev/readiness: probe

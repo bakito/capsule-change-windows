@@ -23,7 +23,7 @@ Use `PLAYGROUND_MINUTES=10`, `PLAYGROUND_PORT=18082`, or
 | `installation/change-windows/values.yaml` | Standalone demo Helm values; admission selects only `development`. |
 | `manifests/kustomization.yaml` | Selects the runnable demo and its executor permissions. |
 | `manifests/demo/` | Demo namespace, workload, Headlamp permissions, and cycling ChangeWindow. |
-| `manifests/examples/` | Individual documented ChangeWindows and executor RBAC examples. |
+| `manifests/examples/` | Documented ChangeWindow bundles with matching ServiceAccounts and action RBAC. |
 | `manifests/dev/` | Dry-run admission probe used by `task dev:deploy`. |
 
 Kind resolves `hostPath: ./plugins` against its working directory. The task stages
@@ -42,7 +42,11 @@ kubectl kustomize playground/manifests
 Apply the demo through its Kustomization, rather than recursively applying every
 sample. The other examples are opt-in and can have overlapping schedules or
 policies. The documentation mounts `manifests/examples/` directly, so examples
-remain the same files used by the policy tests and documentation downloads.
+remain the same files used by the policy tests and documentation downloads. Each
+window file includes its matching ServiceAccount. Action examples also include
+the manager impersonation grant and workload RBAC; admission-only examples grant
+their accounts no additional permissions. Apply one whole file, adapting the
+controller namespace, manager identity, and permitted workload namespaces first.
 
 Headlamp uses a shared, limited demo identity over a localhost-only connection.
 It can edit ChangeWindows and the demo workloads but cannot read controller journal

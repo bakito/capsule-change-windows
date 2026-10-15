@@ -208,6 +208,35 @@ func TestValidator(t *testing.T) {
 	}
 }
 
+func TestValidatorServiceAccount(t *testing.T) {
+	v := &Validator{Mapper: testutil.Mapper()}
+	for _, operation := range []admissionv1.Operation{admissionv1.Create, admissionv1.Update} {
+		for _, account := range []*api.ServiceAccountReference{nil, {}, {Namespace: "dev"}, {Name: "executor"}, {Namespace: "Bad/namespace", Name: "executor"}, {Namespace: "dev", Name: "Bad/name"}, {Namespace: "dev", Name: "executor"}} {
+			window := testutil.Action()
+			old, err := json.Marshal(window)
+			if err != nil {
+				t.Fatal(err)
+			}
+			window.Spec.ServiceAccount = account
+			raw, err := json.Marshal(window)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := request(operation)
+			req.Object.Raw, req.OldObject.Raw = raw, old
+			response := v.Handle(t.Context(), req)
+			valid := account != nil && account.Namespace == "dev" && account.Name == "executor"
+			if response.Allowed != valid {
+				t.Fatalf("%s account %+v: unexpected response %+v", operation, account, response)
+			}
+			req.Operation = admissionv1.Delete
+			if !v.Handle(t.Context(), req).Allowed {
+				t.Fatal("service account validation prevented deletion")
+			}
+		}
+	}
+}
+
 func BenchmarkAdmission(b *testing.B) {
 	for _, n := range []int{1, 100, 1000} {
 		for _, path := range []string{"deny", "allow", "skip"} {

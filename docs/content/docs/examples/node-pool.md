@@ -12,6 +12,9 @@ match your cluster.
 
 {{< example "node-pool-maintenance.yaml" >}}
 
+The manifest also deploys the window's required ServiceAccount. This admission-only
+identity has no workload or impersonation permissions.
+
 ## Who is affected
 
 The denial applies to user `node-operator`, members of group

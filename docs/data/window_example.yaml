@@ -17,9 +17,9 @@
   guide: /docs/guides/schedules#selection-over-time
   reference: /docs/reference/api#changewindowspectargetsindex
 - key: serviceAccount
-  title: Give actions an identity
+  title: Give the window an identity
   path: spec.serviceAccount
-  description: Apply changes as this ServiceAccount, using its Kubernetes permissions. Create the account and grant the executor RBAC before applying this example. Admission-only windows can omit it.
+  description: Every window requires a ServiceAccount. Actions read and patch workloads as this identity, using its Kubernetes permissions. This download includes the account and narrowly scoped executor RBAC; adapt the controller identity and workload namespaces to your cluster.
   guide: /docs/guides/security#executor-permissions
   reference: /docs/reference/api#changewindowspecserviceaccount
 - key: actions

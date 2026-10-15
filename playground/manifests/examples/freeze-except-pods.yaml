@@ -3,6 +3,9 @@ kind: ChangeWindow
 metadata:
   name: tenant-maintenance
 spec:
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: tenant-maintenance
   namespaceSelectors:
     - matchLabels:
         maintenance: enabled
@@ -30,3 +33,10 @@ spec:
       when: Active
       action: Deny
       message: "Tenant maintenance is active. Only Pod changes are allowed for your group."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tenant-maintenance
+  namespace: schedule-action-controller-system
+automountServiceAccountToken: false

@@ -13,7 +13,8 @@ those installed after the ChangeWindow was created.
 
 Label the affected namespaces `maintenance=enabled` and replace `tenant-developers`
 with the group used by your identity provider. The window runs on Sundays at
-02:00 in `Europe/Zurich` for two elapsed hours. It needs no executor ServiceAccount.
+02:00 in `Europe/Zurich` for two elapsed hours. The YAML includes its required
+ServiceAccount, with no workload or impersonation permissions.
 
 ## What is blocked
 

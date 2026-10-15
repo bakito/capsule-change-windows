@@ -19,7 +19,7 @@ spec:
       duration: 48h
   serviceAccount:
     namespace: schedule-action-controller-system
-    name: change-window-executor
+    name: development-downtime-executor
   targets:
     - name: deployments
       apiVersion: apps/v1
@@ -73,3 +73,62 @@ spec:
           subresources: ["", scale]
           when: Active
           message: Maintenance is active until {{ .window.end }}.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: development-downtime-executor
+  namespace: schedule-action-controller-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: impersonate-development-downtime-executor
+  namespace: schedule-action-controller-system
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    resourceNames: [development-downtime-executor]
+    verbs: [impersonate]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: impersonate-development-downtime-executor
+  namespace: schedule-action-controller-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: impersonate-development-downtime-executor
+subjects:
+  - kind: ServiceAccount
+    name: schedule-action-controller-controller-manager
+    namespace: schedule-action-controller-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: development-downtime-scale
+  namespace: development
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: development-downtime-scale
+  namespace: development
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: development-downtime-scale
+subjects:
+  - kind: ServiceAccount
+    name: development-downtime-executor
+    namespace: schedule-action-controller-system

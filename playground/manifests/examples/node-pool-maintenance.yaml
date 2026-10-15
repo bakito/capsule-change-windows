@@ -3,6 +3,9 @@ kind: ChangeWindow
 metadata:
   name: worker-pool-maintenance
 spec:
+  serviceAccount:
+    namespace: schedule-action-controller-system
+    name: worker-pool-maintenance
   schedules:
     - name: sunday
       cron: "0 2 * * 0"
@@ -49,3 +52,10 @@ spec:
           when: BeforeStart
           within: 1h
           message: "Worker pool maintenance begins at {{ .window.start }}."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker-pool-maintenance
+  namespace: schedule-action-controller-system
+automountServiceAccountToken: false

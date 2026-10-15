@@ -50,7 +50,9 @@ All playground inputs live under `playground/`:
   probe used by development deployment.
 
 The task applies `playground/manifests/kustomization.yaml`, which selects only the
-runnable demo and its executor RBAC. Other examples are opt-in; do not recursively
+runnable demo. Its window manifest bundles the corresponding ServiceAccount and
+executor RBAC. Every other documented example also includes its own account;
+action examples include their executor permissions. Other examples are opt-in; do not recursively
 apply every sample because their schedules and policies may overlap.
 
 Preview the manifests without installing anything:

@@ -547,14 +547,19 @@ spec:
                 - name
                 x-kubernetes-list-type: map
               serviceAccount:
-                description: ServiceAccount is the identity used for resource reads
-                  and SSA writes.
+                description: |-
+                  ServiceAccount is required for every window, including admission-only windows.
+                  Resource actions use this identity for workload reads and SSA writes.
                 properties:
                   name:
+                    maxLength: 253
                     minLength: 1
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                   namespace:
+                    maxLength: 63
                     minLength: 1
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                     type: string
                 required:
                 - name
@@ -643,11 +648,9 @@ spec:
                 x-kubernetes-list-type: map
             required:
             - schedules
+            - serviceAccount
             - targets
             type: object
-            x-kubernetes-validations:
-            - message: actions require a serviceAccount
-              rule: '!has(self.actions) || size(self.actions) == 0 || has(self.serviceAccount)'
           status:
             properties:
               active:

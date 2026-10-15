@@ -283,6 +283,7 @@ func TestChangeWindow(t *testing.T) {
 	})
 	t.Run("protected infrastructure stays writable", func(t *testing.T) {
 		guard := &api.ChangeWindow{ObjectMeta: metav1.ObjectMeta{Name: "infrastructure-guard"}, Spec: api.ChangeWindowSpec{
+			ServiceAccount:     &api.ServiceAccountReference{Namespace: "scheduled-dev", Name: "executor"},
 			NamespaceSelectors: []metav1.LabelSelector{{}},
 			Schedules:          []api.Schedule{{Name: "active", Cron: "* * * * *", Duration: metav1.Duration{Duration: 2 * time.Minute}}},
 			Targets:            []api.Target{{Name: "configs", APIVersion: "v1", Kind: "ConfigMap"}},

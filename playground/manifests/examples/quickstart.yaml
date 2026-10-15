@@ -20,7 +20,7 @@ spec:
           downscaling: enabled
   serviceAccount:
     namespace: schedule-action-controller-system
-    name: change-window-executor
+    name: development-nights-executor
   actions:
     - name: downscale
       targets: [apps]
@@ -65,3 +65,62 @@ spec:
           when: BeforeStart
           within: 1h
           message: "Maintenance starts at {{ .window.start }}."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: development-nights-executor
+  namespace: schedule-action-controller-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: impersonate-development-nights-executor
+  namespace: schedule-action-controller-system
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    resourceNames: [development-nights-executor]
+    verbs: [impersonate]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: impersonate-development-nights-executor
+  namespace: schedule-action-controller-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: impersonate-development-nights-executor
+subjects:
+  - kind: ServiceAccount
+    name: schedule-action-controller-controller-manager
+    namespace: schedule-action-controller-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: development-nights-scale
+  namespace: development
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: development-nights-scale
+  namespace: development
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: development-nights-scale
+subjects:
+  - kind: ServiceAccount
+    name: development-nights-executor
+    namespace: schedule-action-controller-system

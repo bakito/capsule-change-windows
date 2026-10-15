@@ -8,7 +8,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +21,6 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	api "github.com/projectcapsule/schedule-action-controller/api/v1alpha1"
 )
@@ -99,7 +97,7 @@ func TestAdmissionMatching(t *testing.T) {
 	saA, _ := actor("system:serviceaccount:audience-a:deployer")
 	saB, _ := actor("system:serviceaccount:audience-b:deployer")
 	match := api.RequestMatch{Targets: []string{"configs"}, Operations: []string{"CREATE", "UPDATE", "DELETE"}, Audience: &api.Audience{Include: []api.Subject{{Kind: "User", Name: "alice"}, {Kind: "Group", Name: "developers"}, {Kind: "ServiceAccount", Name: "deployer", Namespace: "audience-a"}}, Exclude: []api.Subject{{Kind: "User", Name: "bob"}}}, MatchConditions: []api.MatchCondition{{Name: "locked", Expression: "(object != null ? object : oldObject).data.mode == 'locked'"}}}
-	window := &api.ChangeWindow{ObjectMeta: metav1.ObjectMeta{Name: "audience-test"}, Spec: api.ChangeWindowSpec{NamespaceSelectors: []metav1.LabelSelector{{MatchLabels: map[string]string{"audience-test": "audience-a"}}}, Schedules: []api.Schedule{{Name: "active", Cron: "* * * * *", Duration: metav1.Duration{Duration: 2 * time.Minute}}}, Targets: []api.Target{{Name: "configs", APIVersion: "v1", Kind: "ConfigMap"}}, Admission: []api.AdmissionRule{{Name: "freeze", When: "Active", Message: "Audience maintenance denial", RequestMatch: match}}}}
+	window := &api.ChangeWindow{ObjectMeta: metav1.ObjectMeta{Name: "audience-test"}, Spec: api.ChangeWindowSpec{ServiceAccount: &api.ServiceAccountReference{Namespace: "audience-a", Name: "deployer"}, NamespaceSelectors: []metav1.LabelSelector{{MatchLabels: map[string]string{"audience-test": "audience-a"}}}, Schedules: []api.Schedule{{Name: "active", Cron: "* * * * *", Duration: metav1.Duration{Duration: 2 * time.Minute}}}, Targets: []api.Target{{Name: "configs", APIVersion: "v1", Kind: "ConfigMap"}}, Admission: []api.AdmissionRule{{Name: "freeze", When: "Active", Message: "Audience maintenance denial", RequestMatch: match}}}}
 	warnMatch := *match.DeepCopy()
 	warnMatch.MatchConditions[0].Expression = "(object != null ? object : oldObject).data.mode == 'warn'"
 	window.Spec.Config.Admission.Warnings = []api.AdmissionWarning{{Name: "notice", When: "Active", Message: "Audience maintenance warning", RequestMatch: warnMatch}}
@@ -289,14 +287,7 @@ func TestNodePoolExample(t *testing.T) {
 	}
 	createMatching(t, admin, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "node-window-writer"}, Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"nodes"}, ResourceNames: []string{"window-workers", "window-other"}, Verbs: []string{"get", "update", "patch", "delete"}}}})
 	createMatching(t, admin, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "node-window-writer"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "node-window-writer"}, Subjects: []rbacv1.Subject{{Kind: "User", Name: "node-operator", APIGroup: rbacv1.GroupName}, {Kind: "Group", Name: "platform-developers", APIGroup: rbacv1.GroupName}, {Kind: "User", Name: "unrelated-node-user", APIGroup: rbacv1.GroupName}, {Kind: "ServiceAccount", Namespace: "platform", Name: "deployer"}}})
-	data, err := os.ReadFile("../playground/manifests/examples/node-pool-maintenance.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	window := &api.ChangeWindow{}
-	if err := yaml.UnmarshalStrict(data, window); err != nil {
-		t.Fatal(err)
-	}
+	window := prepareExample(t, admin, "node-pool-maintenance.yaml", nil)
 	window.Spec.Schedules = []api.Schedule{{Name: "active", Cron: "* * * * *", Duration: metav1.Duration{Duration: 2 * time.Minute}}}
 	createMatching(t, admin, window)
 	awaitWindow(t, admin, window)
