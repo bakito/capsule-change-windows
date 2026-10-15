@@ -78,10 +78,11 @@ workflows also sign their published digests with Cosign.
 Artifact Hub metadata and this README are published to the `headlamp-plugin`
 branch under `change-windows/<version>/`. The workflow uses
 `headlamp/artifacthub-pkg.yml` as its template, so the first release can create
-the branch. After GoReleaser succeeds, `task headlamp:publish` reuses the pinned
-shared publisher's metadata preparation and Git publication functions with the
-archive that GoReleaser signed and uploaded. It writes the archive URL, checksum,
-version, and creation timestamp without rebuilding or uploading release assets.
+the branch. After GoReleaser succeeds, the release workflow calls the pinned
+shared `headlamp-publish` action with its `archive` input. The action verifies that
+the released archive matches the file GoReleaser signed and uploaded, then writes
+the archive URL, checksum, version, and creation timestamp without rebuilding or
+uploading release assets.
 Release jobs are serialized across tags. Pull requests run the separate Headlamp
 checks with read-only permissions; release publishing runs only on tag pushes.
 

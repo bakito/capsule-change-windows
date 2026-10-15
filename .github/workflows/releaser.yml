@@ -27,19 +27,11 @@ jobs:
         run: devbox run -- task release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Reuse the shared publisher's metadata phases. GoReleaser has already
-      # packaged, signed, and uploaded the plugin before publishing the release.
-      - name: Check out Artifact Hub publisher
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: projectcapsule/github-actions
-          ref: 84ff57abf7d51892eaf19efbbddefcfe56969071
-          path: bin/headlamp-publisher
-          persist-credentials: false
-      - name: Install Artifact Hub publisher dependencies
-        run: devbox run -- npm ci --ignore-scripts --no-audit --no-fund --prefix bin/headlamp-publisher
       - name: Publish Headlamp metadata
-        run: devbox run -- task headlamp:publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEADLAMP_TAG: ${{ github.ref_name }}
+        uses: projectcapsule/github-actions/headlamp-publish@88b19103c6f3a8e6ab172bc17d4bfd181ac37118
+        with:
+          build-root: headlamp/
+          archive: dist/change-windows-*.tar.gz
+          target-branch: headlamp-plugin
+          node-version: '24.21.0'
+          metadata-template: artifacthub-pkg.yml
