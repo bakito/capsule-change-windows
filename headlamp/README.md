@@ -63,21 +63,30 @@ plugin clearly reports an absent API; it does not install controllers or policie
 
 ## Release automation
 
-Pushing a `v*` semantic-version tag runs the same Headlamp checks. After those
-checks and the controller's GitHub release succeed, the centralized
-`headlamp-publish` action builds and attaches the plugin archive to that release.
-The plugin version is taken from the tag; source package files are not committed
-back to the repository.
+Pushing a `v*` semantic-version tag runs one release job for the controller and
+Headlamp. GoReleaser runs `task headlamp:release-build` to check and build the
+plugin, then packages it as `change-windows-<version>.tar.gz`. The archive contains
+`headlamp/main.js`, `headlamp/package.json`, and `headlamp/LICENSE`. Only the built
+package receives the tag version; source package files remain unchanged.
+
+GoReleaser includes the plugin archive in checksums and SBOM generation and signs
+the archives, SBOMs, and checksums with Cosign. Each signed file has a
+`.sigstore.json` bundle. All assets are uploaded before the GitHub release is
+published, so immutable releases are supported. The image and OCI Helm chart
+workflows also sign their published digests with Cosign.
 
 Artifact Hub metadata and this README are published to the `headlamp-plugin`
-branch under `capsule-change-windows/<version>/`. The workflow uses
+branch under `change-windows/<version>/`. The workflow uses
 `headlamp/artifacthub-pkg.yml` as its template, so the first release can create
-the branch. The shared action writes the archive URL, checksum, version, and
-creation timestamp. Publications to that branch are serialized across tags;
-pull requests have read-only permissions and cannot publish.
+the branch. After GoReleaser succeeds, `task headlamp:publish` reuses the pinned
+shared publisher's metadata preparation and Git publication functions with the
+archive that GoReleaser signed and uploaded. It writes the archive URL, checksum,
+version, and creation timestamp without rebuilding or uploading release assets.
+Release jobs are serialized across tags. Pull requests run the separate Headlamp
+checks with read-only permissions; release publishing runs only on tag pushes.
 
-The shared actions are pinned to a commit and use Node 24.21.0 with
-`build-root: headlamp/`. Register the repository's `headlamp-plugin` branch in
+The shared actions and publisher are pinned to a commit. Builds use Node 24.21.0
+from Devbox. Register the repository's `headlamp-plugin` branch in
 Artifact Hub separately, following the
 [Headlamp publishing guide](https://headlamp.dev/docs/latest/development/plugins/publishing/).
 Repository ownership metadata belongs at the publication branch root. Branch

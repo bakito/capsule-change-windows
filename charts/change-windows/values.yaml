@@ -151,8 +151,15 @@ manager:
   # -- Do not use Host Users (User Namespaces)
   hostUsers: false
 
-  # -- Extra arguments to pass to the manager container
+  # Arguments to pass to the manager container
   args:
+    # -- Maximum concurrent ChangeWindow reconciliations
+    workers: 1
+    # -- Kubernetes client QPS
+    kubeApiQPS: 50
+    # -- Kubernetes client burst
+    kubeApiBurst: 100
+    # -- Extra arguments
     extra:
       - "--leader-elect"
 

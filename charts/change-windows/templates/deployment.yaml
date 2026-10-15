@@ -63,6 +63,9 @@ spec:
         - --metrics-bind-address=:8443
         - --metrics-cert-path=/tmp/k8s-webhook-server/serving-certs
         - --health-probe-bind-address=:8081
+        - --workers={{ .Values.manager.args.workers }}
+        - --kube-api-qps={{ .Values.manager.args.kubeApiQPS }}
+        - --kube-api-burst={{ .Values.manager.args.kubeApiBurst }}
         {{- with .Values.manager.args.extra }}
           {{- toYaml . | nindent 8 }}
         {{- end }}

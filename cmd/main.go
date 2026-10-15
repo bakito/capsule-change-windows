@@ -17,6 +17,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -53,6 +54,12 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var controllerOptions config.Controller
+	var kubeAPIQPS float64
+	var kubeAPIBurst int
+	flag.IntVar(&controllerOptions.MaxConcurrentReconciles, "workers", 1, "The maximum number of concurrent ChangeWindow reconciliations.")
+	flag.Float64Var(&kubeAPIQPS, "kube-api-qps", 50, "QPS to use for interacting with the Kubernetes API server.")
+	flag.IntVar(&kubeAPIBurst, "kube-api-burst", 100, "Burst to use for interacting with the Kubernetes API server.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -145,8 +152,13 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := ctrl.GetConfigOrDie()
+	restConfig.QPS = float32(kubeAPIQPS)
+	restConfig.Burst = kubeAPIBurst
+
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
+		Controller:             controllerOptions,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,

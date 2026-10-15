@@ -5,7 +5,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # All tags update the same Artifact Hub branch.
+  group: release-publication
   cancel-in-progress: false
 jobs:
   release:
@@ -17,6 +18,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - uses: creekorful/goreportcard-action@1f35ced8cdac2cba28c9a2f2288a16aacfd507f9 # v1.0
       - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
@@ -25,21 +27,19 @@ jobs:
         run: devbox run -- task release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  headlamp-publish:
-    needs: [release]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    concurrency:
-      group: headlamp-plugin-publication
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Reuse the shared publisher's metadata phases. GoReleaser has already
+      # packaged, signed, and uploaded the plugin before publishing the release.
+      - name: Check out Artifact Hub publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          repository: projectcapsule/github-actions
+          ref: 84ff57abf7d51892eaf19efbbddefcfe56969071
+          path: bin/headlamp-publisher
           persist-credentials: false
-      - uses: projectcapsule/github-actions/headlamp-publish@84ff57abf7d51892eaf19efbbddefcfe56969071
-        with:
-          build-root: headlamp/
-          target-branch: headlamp-plugin
-          node-version: '24.21.0'
-          metadata-template: artifacthub-pkg.yml
+      - name: Install Artifact Hub publisher dependencies
+        run: devbox run -- npm ci --ignore-scripts --no-audit --no-fund --prefix bin/headlamp-publisher
+      - name: Publish Headlamp metadata
+        run: devbox run -- task headlamp:publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEADLAMP_TAG: ${{ github.ref_name }}
